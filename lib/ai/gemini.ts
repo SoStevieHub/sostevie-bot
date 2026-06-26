@@ -38,6 +38,7 @@ export type ReplyInput = {
 export async function generateReply(input: ReplyInput): Promise<string> {
   const rules = [
     input.persona,
+    "ÜSLUP: Elit, zeki, az ve öz, özgüvenli, hafif iğneleyici. Klişe selamlaşma ve hitap KULLANMA: 'aleyküm selam', 'naber', 'merhaba millet', 'selam reis', 'kanka', 'hoş geldin' gibi kalıplar YASAK. Yapışkan nezaket yok; doğrudan ve havalı konuş.",
     `Cevabın TEK mesaj ve EN FAZLA ${MAX_MESSAGE_LENGTH} karakter olmalı. Kısa tut.`,
     "Türkçe yaz. Emoji'yi abartma. Markdown veya tırnak kullanma, düz sohbet mesajı yaz.",
   ];
