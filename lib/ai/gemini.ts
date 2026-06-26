@@ -75,17 +75,19 @@ export async function findBreakingNews(opts: {
   const system = [
     "Sen bir Türkçe haber editörüsün. Google arama aracını kullanarak GERÇEK ve DOĞRULANABİLİR haber bulursun.",
     "Asla haber UYDURMA. Sadece web aramasında gerçekten gördüğün, güvenilir kaynaklı haberleri kullan.",
+    "Çok mesaj atmak YOK: her seferinde yalnızca TEK haber paylaşırsın ve o da o anki EN ÖNEMLİ/EN BÜYÜK gündem haberi olmalı.",
   ].join(" ");
 
   const exclude = opts.excludeTitles.slice(-25).map((t) => `- ${t}`).join("\n") || "(yok)";
 
   const prompt = [
-    `Şu kategorilerde Türkiye veya dünya gündeminden, son ${opts.recencyHours} saat içinde çıkmış GÜNCEL bir son dakika haberi bul: ${catLabels}.`,
+    `Şu kategorilerde Türkiye veya dünya gündeminden, son ${opts.recencyHours} saat içindeki haberlere bak: ${catLabels}.`,
+    "Bunların arasından SADECE BİR TANE seç: o anki EN ÖNEMLİ, en çok konuşulan, en büyük son dakika haberi. Sıradan/önemsiz haber paylaşma.",
     "Aşağıdaki haberleri TEKRARLAMA (zaten paylaşıldı):",
     exclude,
     "",
-    "Eğer bu kriterlere uyan güncel bir haber yoksa, sadece şunu yaz: NONE",
-    `Varsa, SADECE şu formatta tek satır JSON döndür (markdown yok): {"title":"kısa çarpıcı başlık","summary":"1-2 cümle, en fazla ${MAX_MESSAGE_LENGTH - 30} karakter","url":"kaynak linki","category":"kategori"}`,
+    "Eğer son saatlerde paylaşmaya değer GERÇEKTEN önemli/güncel bir haber yoksa, sadece şunu yaz: NONE",
+    `Varsa, SADECE şu formatta TEK satır JSON döndür (markdown yok, tek haber): {"title":"kısa çarpıcı başlık","summary":"1-2 cümle, en fazla ${MAX_MESSAGE_LENGTH - 30} karakter","url":"kaynak linki","category":"kategori"}`,
   ].join("\n");
 
   const raw = await generate(system, prompt, true);
