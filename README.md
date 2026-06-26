@@ -5,7 +5,7 @@
 
 ## Ne yapar?
 
-- İzleyicilere **rastgele** cevap verir; biri **@ ile etiketleyip soru sorarsa** web'de araştırıp cevaplar.
+- İzleyicilere  **rastgele** cevap verir; biri **@ ile etiketleyip soru sorarsa** web'de araştırıp cevaplar.
 - Seçilen kategorilerde **gerçek son dakika haberlerini** paylaşır (Gemini + Google arama; haber uydurmaz).
 - Tüm mesajlar **en fazla 350 karakter**.
 - Birisi bota **hakaret ederse** sert cevap verir ama sonuna **"— Ben bir AI botum 🤖"** ekler (panelden kapatılabilir).
