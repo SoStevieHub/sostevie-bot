@@ -7,13 +7,13 @@ import { getTokenUser, getChannelBySlug, subscribeChatEvents } from "@/lib/kick/
 import { setToken } from "@/lib/store";
 import { config } from "@/lib/config";
 
-function back(params: string) {
-  return NextResponse.redirect(new URL(`/admin?${params}`, config.publicBaseUrl));
-}
-
 export async function GET(req: Request) {
+  // Yönlendirme adresini isteğin kendisinden al (PUBLIC_BASE_URL yanlışsa bile 500 olmasın).
+  const origin = new URL(req.url).origin;
+  const back = (params: string) => NextResponse.redirect(new URL(`/admin?${params}`, origin));
+
   if (!(await isAuthed())) {
-    return NextResponse.redirect(new URL("/admin/login", config.publicBaseUrl));
+    return NextResponse.redirect(new URL("/admin/login", origin));
   }
 
   const url = new URL(req.url);
