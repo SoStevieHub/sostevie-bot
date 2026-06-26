@@ -10,6 +10,8 @@ export type Settings = {
   randomReplyPercent: number;
   toxicModeEnabled: boolean;
   persona: string;
+  ownerProfile: string; // kanal sahibi hakkında bilinecek/övülecek bilgiler
+  defendOwner: boolean; // sahibine saldırana karşılık ver + onu savun
 };
 
 export type OAuthToken = {
@@ -46,6 +48,11 @@ const DEFAULT_PERSONA = [
   "Robotik veya yapışkan-nazik kalıplara girmezsin; havalı, net ve sofistike konuşursun.",
 ].join(" ");
 
+const DEFAULT_OWNER_PROFILE = [
+  "Kanal sahibi / yayıncı: SoStevie.",
+  "En sevdiği grup: Pink Floyd. En sevdiği müzik tarzı: Grunge.",
+].join(" ");
+
 const DEFAULT_SETTINGS: Settings = {
   botEnabled: true,
   newsIntervalMinutes: 30,
@@ -54,6 +61,8 @@ const DEFAULT_SETTINGS: Settings = {
   randomReplyPercent: 5,
   toxicModeEnabled: true,
   persona: DEFAULT_PERSONA,
+  ownerProfile: DEFAULT_OWNER_PROFILE,
+  defendOwner: true,
 };
 
 const MAX_LOG = 200;

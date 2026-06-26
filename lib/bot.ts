@@ -4,6 +4,7 @@ import { getSettings, getToken, addLog, getRecentPostedNews, addPostedNews, hasP
 import { getChannelBroadcasterId, sendChatMessage } from "./kick/api";
 import { generateReply, findBreakingNews } from "./ai/gemini";
 import { detectInsult, classifyMention, finalizeMessage, formatNews } from "./moderation";
+import { config } from "./config";
 
 export type IncomingMessage = {
   username: string;
@@ -18,6 +19,8 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
 
   const token = await getToken("writer");
   const botUsername = token?.botUsername ?? "";
+  const reader = await getToken("reader");
+  const ownerName = reader?.botUsername || config.kick.channelSlug;
 
   // Botun kendi mesajına cevap verme (döngü engeli).
   if (botUsername && msg.username.toLowerCase() === botUsername.toLowerCase()) return;
@@ -26,10 +29,15 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   const isInsult = detectInsult(msg.content);
   const { mentioned, isQuestion } = classifyMention(msg.content, botUsername);
 
+  const isFromOwner = !!ownerName && msg.username.toLowerCase() === ownerName.toLowerCase();
+  const mentionsOwner = !!ownerName && msg.content.toLowerCase().includes(ownerName.toLowerCase());
+  // Sahibine saldırı: adı geçiyor + küfür var + sahibinin kendisi değil.
+  const attackOnOwner = settings.defendOwner && mentionsOwner && isInsult && !isFromOwner;
+
   await addLog({ direction: "in", kind: "incoming", username: msg.username, content: msg.content });
 
-  // Cevap kararı: etiket/hakaret -> her zaman; aksi halde olasılıkla.
-  const mustReply = mentioned || isInsult;
+  // Cevap kararı: etiket/hakaret/sahibine saldırı -> her zaman; aksi halde olasılıkla.
+  const mustReply = mentioned || isInsult || attackOnOwner;
   const randomReply = Math.random() * 100 < settings.randomReplyPercent;
   if (!mustReply && !randomReply) return;
 
@@ -41,6 +49,10 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
       isQuestion: isQuestion && mentioned, // sadece bota yönelik soruları araştır
       persona: settings.persona,
       toxicMode: settings.toxicModeEnabled,
+      ownerName,
+      ownerProfile: settings.ownerProfile,
+      defendOwner: settings.defendOwner,
+      isFromOwner,
     });
     if (!raw) return;
 

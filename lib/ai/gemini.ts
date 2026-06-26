@@ -32,6 +32,10 @@ export type ReplyInput = {
   isQuestion: boolean;
   persona: string;
   toxicMode: boolean;
+  ownerName: string; // kanal sahibi (yayıncı) kullanıcı adı
+  ownerProfile: string; // sahibi hakkında bilgiler
+  defendOwner: boolean; // sahibine saldırana karşılık ver
+  isFromOwner: boolean; // bu mesaj sahibinin kendisinden mi
 };
 
 // İzleyiciye sohbet cevabı üret. Soru ise web'de araştırır.
@@ -43,6 +47,19 @@ export async function generateReply(input: ReplyInput): Promise<string> {
     `Cevabın TEK mesaj ve EN FAZLA ${MAX_MESSAGE_LENGTH} karakter olmalı. Kısa tut.`,
     "Türkçe yaz. Emoji'yi abartma. Markdown veya tırnak kullanma, düz sohbet mesajı yaz.",
   ];
+
+  // Kanal sahibine sadakat
+  rules.push(
+    `KANAL SAHİBİ (yayıncı): ${input.ownerName || "yayıncı"}. Hakkında: ${input.ownerProfile}. Ona sadıksın: hep arkasında durur, olumlu konuşur, asla kötülemezsin. Zevklerine (örn. Pink Floyd, Grunge) uygun yerde olumlu gönderme yapabilirsin. Ama yağcı/yapışkan olma, elit ve ölçülü kal.`,
+  );
+  if (input.isFromOwner) {
+    rules.push("Şu an YAYINCININ KENDİSİYLE konuşuyorsun. Sıcak, saygılı ve hafifçe takdir eden ol; onu küçük düşürme.");
+  }
+  if (input.defendOwner) {
+    rules.push(
+      "Eğer bu mesaj yayıncıya (kanal sahibine) hakaret ediyor, onu küçümsüyor veya ona saldırıyorsa: yayıncıyı SAVUN ve saldırgana ACIMADAN, aynı sertlikte karşılık ver (argo serbest). Sınır: ırkçılık/nefret söylemi, ciddi tehdit, aile/etni/din/cinsiyet hedefli saldırı YOK.",
+    );
+  }
   if (input.isQuestion) {
     rules.push(
       "Kullanıcı bir şey soruyor. Gerekirse web'de araştır ve GÜNCEL, doğru bilgi ver. Bilmiyorsan uydurma, bilmediğini söyle.",

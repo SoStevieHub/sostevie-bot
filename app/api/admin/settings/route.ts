@@ -15,7 +15,9 @@ export async function PUT(req: Request) {
   const patch: Partial<Settings> = {};
   if (typeof body.botEnabled === "boolean") patch.botEnabled = body.botEnabled;
   if (typeof body.toxicModeEnabled === "boolean") patch.toxicModeEnabled = body.toxicModeEnabled;
+  if (typeof body.defendOwner === "boolean") patch.defendOwner = body.defendOwner;
   if (typeof body.persona === "string") patch.persona = body.persona.slice(0, 2000);
+  if (typeof body.ownerProfile === "string") patch.ownerProfile = body.ownerProfile.slice(0, 1500);
   if (Number.isFinite(body.newsIntervalMinutes))
     patch.newsIntervalMinutes = clamp(Number(body.newsIntervalMinutes), 1, 1440);
   if (Number.isFinite(body.newsRecencyHours))
