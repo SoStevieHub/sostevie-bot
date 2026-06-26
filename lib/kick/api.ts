@@ -66,8 +66,10 @@ export async function getTokenUser(token: string): Promise<{ user_id: number; na
   return json.data?.[0] ?? null;
 }
 
+export type SendResult = { ok: boolean; status?: number; error?: string };
+
 // Kanala mesaj gönder (bot olarak). content 500 char'ı aşmamalı (biz 350 ile sınırlıyoruz).
-export async function sendChatMessage(broadcasterUserId: number, content: string): Promise<boolean> {
+export async function sendChatMessage(broadcasterUserId: number, content: string): Promise<SendResult> {
   const res = await kickFetch(`/chat`, {
     method: "POST",
     body: JSON.stringify({
@@ -77,10 +79,11 @@ export async function sendChatMessage(broadcasterUserId: number, content: string
     }),
   });
   if (!res.ok) {
-    console.error("[kick] mesaj gönderme hatası:", res.status, await res.text());
-    return false;
+    const body = await res.text();
+    console.error("[kick] mesaj gönderme hatası:", res.status, body);
+    return { ok: false, status: res.status, error: body.slice(0, 300) };
   }
-  return true;
+  return { ok: true };
 }
 
 // chat.message.sent webhook aboneliği oluştur.

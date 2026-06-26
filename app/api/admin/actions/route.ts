@@ -14,9 +14,13 @@ export async function POST(req: Request) {
     const id = await getChannelBroadcasterId();
     if (!id) return NextResponse.json({ error: "Kanal/token yok. Önce bot hesabını bağla." }, { status: 400 });
     const msg = finalizeMessage(text || "Selam millet, bot ayakta! 🤖", { isInsult: false });
-    const ok = await sendChatMessage(id, msg);
-    if (ok) await addLog({ direction: "out", kind: "reply", username: "(test)", content: msg });
-    return NextResponse.json({ ok, sent: msg });
+    const r = await sendChatMessage(id, msg);
+    if (r.ok) await addLog({ direction: "out", kind: "reply", username: "(test)", content: msg });
+    return NextResponse.json({
+      ok: r.ok,
+      sent: msg,
+      error: r.ok ? undefined : `Kick ${r.status}: ${r.error}`,
+    });
   }
 
   if (action === "news") {

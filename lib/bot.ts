@@ -45,8 +45,8 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
     if (!raw) return;
 
     const text = finalizeMessage(raw, { isInsult });
-    const ok = await sendChatMessage(msg.broadcasterUserId, text);
-    if (ok) {
+    const sent = await sendChatMessage(msg.broadcasterUserId, text);
+    if (sent.ok) {
       await addLog({
         direction: "out",
         kind: isInsult ? "insult" : "reply",
@@ -91,8 +91,8 @@ export async function runNewsTick(): Promise<{ posted: boolean; reason?: string 
   if (await hasPostedNews(hash)) return { posted: false, reason: "zaten paylaşılmış" };
 
   const text = formatNews(news.title, news.summary);
-  const ok = await sendChatMessage(broadcasterId, text);
-  if (!ok) return { posted: false, reason: "gönderim hatası" };
+  const sent = await sendChatMessage(broadcasterId, text);
+  if (!sent.ok) return { posted: false, reason: `gönderim hatası (${sent.status}): ${sent.error ?? ""}` };
 
   await addPostedNews({ hash, title: news.title, url: news.url, category: news.category });
   await addLog({ direction: "out", kind: "news", username: "", content: text });
