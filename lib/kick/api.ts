@@ -75,7 +75,9 @@ export async function sendChatMessage(broadcasterUserId: number, content: string
     body: JSON.stringify({
       broadcaster_user_id: broadcasterUserId,
       content,
-      type: "bot",
+      // Başka birinin kanalına (sostevie) yazdığımız için "user". "bot" yalnız
+      // token sahibinin kendi kanalına yazar ve burada Kick 500 döndürür.
+      type: "user",
     }),
   });
   if (!res.ok) {
