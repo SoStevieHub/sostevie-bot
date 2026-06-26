@@ -16,7 +16,7 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   const settings = await getSettings();
   if (!settings.botEnabled) return;
 
-  const token = await getToken();
+  const token = await getToken("writer");
   const botUsername = token?.botUsername ?? "";
 
   // Botun kendi mesajına cevap verme (döngü engeli).

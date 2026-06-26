@@ -1,11 +1,11 @@
-// Kick public API istemcisi — geçerli token yönetimi + mesaj/abonelik işlemleri.
-import { KICK_API_BASE, config } from "@/lib/config";
-import { getToken, setToken } from "@/lib/store";
+// Kick public API istemcisi — iki token (reader=yayıncı, writer=bot) yönetimi.
+import { KICK_API_BASE } from "@/lib/config";
+import { getToken, setToken, getBroadcasterId, type Role } from "@/lib/store";
 import { refreshToken } from "./oauth";
 
-// Süresi dolmak üzereyse token'ı yeniler; geçerli access token döner.
-export async function getValidAccessToken(): Promise<string | null> {
-  const t = await getToken();
+// Süresi dolmak üzereyse ilgili rolün token'ını yeniler; geçerli access token döner.
+export async function getValidAccessToken(role: Role): Promise<string | null> {
+  const t = await getToken(role);
   if (!t) return null;
 
   // 60 sn'den az kaldıysa yenile.
@@ -13,7 +13,7 @@ export async function getValidAccessToken(): Promise<string | null> {
 
   try {
     const refreshed = await refreshToken(t.refreshToken);
-    await setToken({
+    await setToken(role, {
       ...t,
       accessToken: refreshed.access_token,
       refreshToken: refreshed.refresh_token || t.refreshToken,
@@ -22,14 +22,17 @@ export async function getValidAccessToken(): Promise<string | null> {
     });
     return refreshed.access_token;
   } catch (e) {
-    console.error("[kick] token yenileme hatası:", e);
+    console.error(`[kick] token yenileme hatası (${role}):`, e);
     return null;
   }
 }
 
-async function kickFetch(path: string, init: RequestInit & { token?: string } = {}) {
-  const token = init.token ?? (await getValidAccessToken());
-  if (!token) throw new Error("Bot hesabı bağlı değil (token yok).");
+async function kickFetch(
+  path: string,
+  init: RequestInit & { token?: string; role?: Role } = {},
+) {
+  const token = init.token ?? (init.role ? await getValidAccessToken(init.role) : null);
+  if (!token) throw new Error("Geçerli token yok (hesap bağlı değil).");
   const res = await fetch(`${KICK_API_BASE}${path}`, {
     ...init,
     headers: {
@@ -45,7 +48,7 @@ async function kickFetch(path: string, init: RequestInit & { token?: string } = 
 type KickChannel = { broadcaster_user_id: number; slug: string; [k: string]: unknown };
 
 // Slug'tan kanal bilgisi (broadcaster_user_id) çek.
-export async function getChannelBySlug(slug: string, token?: string): Promise<KickChannel | null> {
+export async function getChannelBySlug(slug: string, token: string): Promise<KickChannel | null> {
   const res = await kickFetch(`/channels?slug=${encodeURIComponent(slug)}`, { token });
   if (!res.ok) {
     console.error("[kick] kanal çekme hatası:", res.status, await res.text());
@@ -55,7 +58,7 @@ export async function getChannelBySlug(slug: string, token?: string): Promise<Ki
   return json.data?.[0] ?? null;
 }
 
-// Token'ın ait olduğu kullanıcıyı çek (bot hesabının kimliği).
+// Token'ın ait olduğu kullanıcıyı çek (hesabın kimliği).
 export async function getTokenUser(token: string): Promise<{ user_id: number; name: string } | null> {
   const res = await kickFetch(`/users`, { token });
   if (!res.ok) {
@@ -68,15 +71,15 @@ export async function getTokenUser(token: string): Promise<{ user_id: number; na
 
 export type SendResult = { ok: boolean; status?: number; error?: string };
 
-// Kanala mesaj gönder (bot olarak). content 500 char'ı aşmamalı (biz 350 ile sınırlıyoruz).
+// Kanala mesaj gönder — BOT (writer) token'ı ile, type:user.
 export async function sendChatMessage(broadcasterUserId: number, content: string): Promise<SendResult> {
   const res = await kickFetch(`/chat`, {
+    role: "writer",
     method: "POST",
     body: JSON.stringify({
       broadcaster_user_id: broadcasterUserId,
       content,
-      // Başka birinin kanalına (sostevie) yazdığımız için "user". "bot" yalnız
-      // token sahibinin kendi kanalına yazar ve burada Kick 500 döndürür.
+      // Yayıncının kanalına yazıyoruz; bot kendi kanalı olmadığından "user".
       type: "user",
     }),
   });
@@ -88,9 +91,10 @@ export async function sendChatMessage(broadcasterUserId: number, content: string
   return { ok: true };
 }
 
-// chat.message.sent webhook aboneliği oluştur.
-export async function subscribeChatEvents(broadcasterUserId: number): Promise<boolean> {
+// chat.message.sent webhook aboneliği — YAYINCI (reader) token'ı ile.
+export async function subscribeChatEvents(broadcasterUserId: number, token: string): Promise<boolean> {
   const res = await kickFetch(`/events/subscriptions`, {
+    token,
     method: "POST",
     body: JSON.stringify({
       broadcaster_user_id: broadcasterUserId,
@@ -105,15 +109,7 @@ export async function subscribeChatEvents(broadcasterUserId: number): Promise<bo
   return true;
 }
 
-// "sostevie" kanalının broadcaster id'sini bir kez çözüp önbelleğe al.
-let cachedBroadcasterId: number | null = null;
+// Yayıncı kanalının broadcaster id'si (reader bağlanınca store'a yazılır).
 export async function getChannelBroadcasterId(): Promise<number | null> {
-  if (cachedBroadcasterId) return cachedBroadcasterId;
-  try {
-    const ch = await getChannelBySlug(config.kick.channelSlug);
-    if (ch) cachedBroadcasterId = ch.broadcaster_user_id;
-  } catch (e) {
-    console.error("[kick] broadcaster id çözülemedi:", e);
-  }
-  return cachedBroadcasterId;
+  return getBroadcasterId();
 }

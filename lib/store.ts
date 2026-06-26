@@ -59,13 +59,17 @@ const MAX_NEWS = 500;
 
 const K = {
   settings: "sostevie:settings",
-  oauth: "sostevie:oauth",
+  oauthReader: "sostevie:oauth:reader", // yayıncı (SoStevie) — sohbeti dinler
+  oauthWriter: "sostevie:oauth:writer", // bot (BotStevie) — mesaj atar
+  broadcasterId: "sostevie:broadcasterId",
   newsHashes: "sostevie:news:hashes",
   newsList: "sostevie:news:list",
   log: "sostevie:log",
   logSeq: "sostevie:log:seq",
   lastNewsRun: "sostevie:lastNewsRun",
 } as const;
+
+export type Role = "reader" | "writer";
 
 let redis: Redis | null = null;
 function db(): Redis {
@@ -91,13 +95,22 @@ export async function updateSettings(patch: Partial<Settings>): Promise<Settings
   return next;
 }
 
-// ---- OAuth ----
-export async function getToken(): Promise<OAuthToken> {
-  return (await db().get<OAuthToken>(K.oauth)) ?? null;
+// ---- OAuth (rol bazlı: reader = yayıncı, writer = bot) ----
+export async function getToken(role: Role): Promise<OAuthToken> {
+  return (await db().get<OAuthToken>(role === "reader" ? K.oauthReader : K.oauthWriter)) ?? null;
 }
 
-export async function setToken(token: OAuthToken): Promise<void> {
-  await db().set(K.oauth, token);
+export async function setToken(role: Role, token: OAuthToken): Promise<void> {
+  await db().set(role === "reader" ? K.oauthReader : K.oauthWriter, token);
+}
+
+// Yayıncı kanalının broadcaster id'si (mesaj göndermek + abonelik için).
+export async function getBroadcasterId(): Promise<number | null> {
+  return (await db().get<number>(K.broadcasterId)) ?? null;
+}
+
+export async function setBroadcasterId(id: number): Promise<void> {
+  await db().set(K.broadcasterId, id);
 }
 
 // ---- PostedNews (dedupe) ----

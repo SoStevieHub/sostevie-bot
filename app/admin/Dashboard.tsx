@@ -22,8 +22,11 @@ type LogRow = {
 };
 
 type Status = {
-  connected: boolean;
-  botUsername: string;
+  readerConnected: boolean;
+  readerUsername: string;
+  writerConnected: boolean;
+  writerUsername: string;
+  broadcasterReady: boolean;
   channelSlug: string;
   geminiConfigured: boolean;
   kickConfigured: boolean;
@@ -119,19 +122,25 @@ export default function Dashboard({ categories }: { categories: { id: string; la
         {/* Durum */}
         <Card title="Bağlantı durumu">
           <div className="grid sm:grid-cols-2 gap-3 text-sm">
-            <Stat label="Bot hesabı" ok={status.connected} text={status.connected ? `@${status.botUsername}` : "bağlı değil"} />
-            <Stat label="Kick anahtarları" ok={status.kickConfigured} text={status.kickConfigured ? "tanımlı" : "eksik (.env)"} />
+            <Stat label="Yayıncı (sohbeti okur)" ok={status.readerConnected && status.broadcasterReady} text={status.readerConnected ? `@${status.readerUsername}` : "bağlı değil"} />
+            <Stat label="Bot (mesaj atar)" ok={status.writerConnected} text={status.writerConnected ? `@${status.writerUsername}` : "bağlı değil"} />
             <Stat label="Gemini anahtarı" ok={status.geminiConfigured} text={status.geminiConfigured ? "tanımlı" : "eksik (.env)"} />
             <Stat label="Bot durumu" ok={settings.botEnabled} text={settings.botEnabled ? "açık" : "duraklatıldı"} />
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <a href="/api/kick/oauth/start" className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-medium">
-              {status.connected ? "Bot hesabını yeniden bağla" : "Bot hesabını bağla"}
+            <a href="/api/kick/oauth/start?role=reader" className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-medium">
+              {status.readerConnected ? "Yayıncıyı yeniden bağla" : "Yayıncı hesabını bağla (SoStevie)"}
+            </a>
+            <a href="/api/kick/oauth/start?role=writer" className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-medium">
+              {status.writerConnected ? "Botu yeniden bağla" : "Bot hesabını bağla (BotStevie)"}
             </a>
             <button onClick={() => action("test")} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 px-4 py-2 text-sm">Test mesajı at</button>
             <button onClick={() => action("news")} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 px-4 py-2 text-sm">Şimdi haber paylaş</button>
           </div>
-          <p className="mt-3 text-xs text-neutral-500 break-all">Webhook URL: {webhookUrl}</p>
+          <p className="mt-2 text-xs text-neutral-500">
+            Önce <b>yayıncı</b> hesabını (incognito'da SoStevie) bağla — sohbet okuma açılır. Sonra <b>bot</b> hesabını (incognito'da BotStevie) bağla — mesajları o atar.
+          </p>
+          <p className="mt-2 text-xs text-neutral-500 break-all">Webhook URL: {webhookUrl}</p>
         </Card>
 
         {/* Genel */}

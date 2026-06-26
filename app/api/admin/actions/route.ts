@@ -12,7 +12,7 @@ export async function POST(req: Request) {
 
   if (action === "test") {
     const id = await getChannelBroadcasterId();
-    if (!id) return NextResponse.json({ error: "Kanal/token yok. Önce bot hesabını bağla." }, { status: 400 });
+    if (!id) return NextResponse.json({ error: "Kanal hazır değil. Önce YAYINCI hesabını (SoStevie) bağla." }, { status: 400 });
     const msg = finalizeMessage(text || "Selam millet, bot ayakta! 🤖", { isInsult: false });
     const r = await sendChatMessage(id, msg);
     if (r.ok) await addLog({ direction: "out", kind: "reply", username: "(test)", content: msg });
