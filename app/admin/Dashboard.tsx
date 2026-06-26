@@ -30,7 +30,8 @@ type Status = {
   writerUsername: string;
   broadcasterReady: boolean;
   channelSlug: string;
-  geminiConfigured: boolean;
+  groqConfigured: boolean;
+  searchConfigured: boolean;
   kickConfigured: boolean;
   publicBaseUrl: string;
   logs: LogRow[];
@@ -126,7 +127,7 @@ export default function Dashboard({ categories }: { categories: { id: string; la
           <div className="grid sm:grid-cols-2 gap-3 text-sm">
             <Stat label="Yayıncı (sohbeti okur)" ok={status.readerConnected && status.broadcasterReady} text={status.readerConnected ? `@${status.readerUsername}` : "bağlı değil"} />
             <Stat label="Bot (mesaj atar)" ok={status.writerConnected} text={status.writerConnected ? `@${status.writerUsername}` : "bağlı değil"} />
-            <Stat label="Gemini anahtarı" ok={status.geminiConfigured} text={status.geminiConfigured ? "tanımlı" : "eksik (.env)"} />
+            <Stat label="Groq anahtarı" ok={status.groqConfigured} text={status.groqConfigured ? "tanımlı" : "eksik (.env)"} />
             <Stat label="Bot durumu" ok={settings.botEnabled} text={settings.botEnabled ? "açık" : "duraklatıldı"} />
           </div>
           <div className="mt-4 flex flex-wrap gap-2">

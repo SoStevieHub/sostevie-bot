@@ -10,9 +10,13 @@ export const config = {
     redirectUri: req("KICK_REDIRECT_URI", "http://localhost:3000/api/kick/oauth/callback"),
     channelSlug: req("KICK_CHANNEL_SLUG", "sostevie").toLowerCase(),
   },
-  gemini: {
-    apiKey: req("GEMINI_API_KEY"),
-    model: req("GEMINI_MODEL", "gemini-2.5-flash"),
+  groq: {
+    apiKey: req("GROQ_API_KEY"),
+    model: req("GROQ_MODEL", "llama-3.3-70b-versatile"),
+  },
+  // Sorular için ücretsiz web arama (opsiyonel). Yoksa model kendi bilgisinden cevaplar.
+  tavily: {
+    apiKey: req("TAVILY_API_KEY"),
   },
   admin: {
     password: req("ADMIN_PASSWORD", "degistir-beni"),

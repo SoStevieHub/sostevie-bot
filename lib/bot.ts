@@ -2,7 +2,7 @@
 import crypto from "node:crypto";
 import { getSettings, getToken, addLog, getRecentPostedNews, addPostedNews, hasPostedNews } from "./store";
 import { getChannelBroadcasterId, sendChatMessage } from "./kick/api";
-import { generateReply, findBreakingNews } from "./ai/gemini";
+import { generateReply, findBreakingNews } from "./ai/engine";
 import { detectInsult, classifyMention, finalizeMessage, formatNews } from "./moderation";
 import { config } from "./config";
 
