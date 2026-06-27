@@ -12,6 +12,8 @@ function providers(): Provider[] {
     p.push({ name: "cerebras", url: "https://api.cerebras.ai/v1/chat/completions", key: config.cerebras.apiKey, model: config.cerebras.model });
   if (config.openrouter.apiKey)
     p.push({ name: "openrouter", url: "https://openrouter.ai/api/v1/chat/completions", key: config.openrouter.apiKey, model: config.openrouter.model });
+  if (config.gemini.apiKey)
+    p.push({ name: "gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: config.gemini.apiKey, model: config.gemini.model });
   if (config.ollama.url)
     p.push({ name: "ollama", url: `${config.ollama.url.replace(/\/$/, "")}/v1/chat/completions`, model: config.ollama.model });
   return p;

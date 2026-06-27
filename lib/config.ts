@@ -23,6 +23,11 @@ export const config = {
     apiKey: req("OPENROUTER_API_KEY"),
     model: req("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
   },
+  // Gemini (OpenAI uyumlu uç) — kotası kısıtlı, zincirde son yedek olarak.
+  gemini: {
+    apiKey: req("GEMINI_API_KEY"),
+    model: req("GEMINI_MODEL", "gemini-2.0-flash"),
+  },
   // Opsiyonel: kendi sunucundaki Ollama (OpenAI uyumlu uç). Vercel'in erişebilmesi için public URL olmalı.
   ollama: {
     url: req("OLLAMA_URL"),

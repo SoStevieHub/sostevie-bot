@@ -38,6 +38,23 @@ export function classifyMention(
   return { mentioned, isQuestion };
 }
 
+// Metni max'a sığdırırken cümleyi/kelimeyi ortadan KESMEZ:
+// önce limitten önceki son cümle sonunu (.!?…) dener, yoksa son boşluğu, en son … ekler.
+function cutTo(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const slice = text.slice(0, max);
+  const lastPunct = Math.max(
+    slice.lastIndexOf("."),
+    slice.lastIndexOf("!"),
+    slice.lastIndexOf("?"),
+    slice.lastIndexOf("…"),
+  );
+  if (lastPunct >= Math.floor(max * 0.5)) return slice.slice(0, lastPunct + 1).trim();
+  const lastSpace = slice.lastIndexOf(" ");
+  if (lastSpace >= Math.floor(max * 0.5)) return slice.slice(0, lastSpace).trim() + "…";
+  return slice.slice(0, max - 1).trim() + "…";
+}
+
 // Çıktıyı 350 karaktere sığdır; hakaret cevabıysa AI notunu garanti et.
 export function finalizeMessage(text: string, opts: { isInsult: boolean }): string {
   let body = text.replace(/\s+/g, " ").trim();
@@ -46,14 +63,15 @@ export function finalizeMessage(text: string, opts: { isInsult: boolean }): stri
     const alreadyHasNote = /ai\s*bot|yapay\s*zek|bir\s*botum/i.test(body);
     if (!alreadyHasNote) {
       const room = MAX_MESSAGE_LENGTH - AI_NOTE.length - 1;
-      if (body.length > room) body = body.slice(0, room).trimEnd();
-      body = `${body} ${AI_NOTE}`;
+      body = `${cutTo(body, room)} ${AI_NOTE}`;
+    } else {
+      body = cutTo(body, MAX_MESSAGE_LENGTH);
     }
+  } else {
+    body = cutTo(body, MAX_MESSAGE_LENGTH);
   }
 
-  if (body.length > MAX_MESSAGE_LENGTH) {
-    body = body.slice(0, MAX_MESSAGE_LENGTH - 1).trimEnd() + "…";
-  }
+  if (body.length > MAX_MESSAGE_LENGTH) body = body.slice(0, MAX_MESSAGE_LENGTH);
   return body;
 }
 
@@ -66,8 +84,5 @@ export function formatNews(title: string, summary: string): string {
   } else {
     msg = `📰 ${msg}`;
   }
-  if (msg.length > MAX_MESSAGE_LENGTH) {
-    msg = msg.slice(0, MAX_MESSAGE_LENGTH - 1).trimEnd() + "…";
-  }
-  return msg;
+  return cutTo(msg, MAX_MESSAGE_LENGTH);
 }
