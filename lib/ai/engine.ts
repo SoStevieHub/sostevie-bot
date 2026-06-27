@@ -1,6 +1,6 @@
 // Cevap üretimi (Groq + opsiyonel web arama) ve haber seçimi (RSS + Groq).
 import { MAX_MESSAGE_LENGTH } from "@/lib/config";
-import { chat } from "./groq";
+import { chat } from "./llm";
 import { webSearch } from "./search";
 import { fetchNews } from "@/lib/news/rss";
 

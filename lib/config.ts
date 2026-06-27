@@ -10,9 +10,23 @@ export const config = {
     redirectUri: req("KICK_REDIRECT_URI", "http://localhost:3000/api/kick/oauth/callback"),
     channelSlug: req("KICK_CHANNEL_SLUG", "sostevie").toLowerCase(),
   },
+  // Sohbet için sağlayıcı zinciri — sırayla denenir, biri limit yerse diğerine geçer.
   groq: {
     apiKey: req("GROQ_API_KEY"),
     model: req("GROQ_MODEL", "llama-3.3-70b-versatile"),
+  },
+  cerebras: {
+    apiKey: req("CEREBRAS_API_KEY"),
+    model: req("CEREBRAS_MODEL", "llama-3.3-70b"),
+  },
+  openrouter: {
+    apiKey: req("OPENROUTER_API_KEY"),
+    model: req("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
+  },
+  // Opsiyonel: kendi sunucundaki Ollama (OpenAI uyumlu uç). Vercel'in erişebilmesi için public URL olmalı.
+  ollama: {
+    url: req("OLLAMA_URL"),
+    model: req("OLLAMA_MODEL", "llama3.1"),
   },
   // Sorular için ücretsiz web arama (opsiyonel). Yoksa model kendi bilgisinden cevaplar.
   tavily: {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isAuthed } from "@/lib/auth";
 import { getToken, getLogs, getBroadcasterId } from "@/lib/store";
 import { config } from "@/lib/config";
+import { configuredProviders } from "@/lib/ai/llm";
 
 export async function GET() {
   if (!(await isAuthed())) return NextResponse.json({ error: "yetkisiz" }, { status: 401 });
@@ -20,7 +21,7 @@ export async function GET() {
     writerUsername: writer?.botUsername ?? "",
     broadcasterReady: !!broadcasterId,
     channelSlug: config.kick.channelSlug,
-    groqConfigured: !!config.groq.apiKey,
+    llmProviders: configuredProviders(),
     searchConfigured: !!config.tavily.apiKey,
     kickConfigured: !!config.kick.clientId && !!config.kick.clientSecret,
     publicBaseUrl: config.publicBaseUrl,
