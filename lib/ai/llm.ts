@@ -6,8 +6,12 @@ type Provider = { name: string; url: string; key?: string; model: string };
 
 function providers(): Provider[] {
   const p: Provider[] = [];
+  const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
   if (config.groq.apiKey)
-    p.push({ name: "groq", url: "https://api.groq.com/openai/v1/chat/completions", key: config.groq.apiKey, model: config.groq.model });
+    p.push({ name: "groq-70b", url: groqUrl, key: config.groq.apiKey, model: config.groq.model });
+  // Groq'un yüksek limitli yedek modeli (70b dolunca devralır, ayrı kota).
+  if (config.groq.apiKey && config.groq.fallbackModel)
+    p.push({ name: "groq-8b", url: groqUrl, key: config.groq.apiKey, model: config.groq.fallbackModel });
   if (config.cerebras.apiKey)
     p.push({ name: "cerebras", url: "https://api.cerebras.ai/v1/chat/completions", key: config.cerebras.apiKey, model: config.cerebras.model });
   if (config.openrouter.apiKey)

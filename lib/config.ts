@@ -14,10 +14,13 @@ export const config = {
   groq: {
     apiKey: req("GROQ_API_KEY"),
     model: req("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    // Yüksek limitli yedek (70b dakikalık limite vurunca devralır).
+    fallbackModel: req("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant"),
   },
   cerebras: {
     apiKey: req("CEREBRAS_API_KEY"),
-    model: req("CEREBRAS_MODEL", "llama-3.3-70b"),
+    // Ücretsiz hesapların eriştiği model. 70b erişimin varsa CEREBRAS_MODEL ile değiştir.
+    model: req("CEREBRAS_MODEL", "llama3.1-8b"),
   },
   openrouter: {
     apiKey: req("OPENROUTER_API_KEY"),
