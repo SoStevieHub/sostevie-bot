@@ -80,6 +80,8 @@ const K = {
   lastNewsRun: "sostevie:lastNewsRun",
   chatterIndex: "sostevie:chatters", // sorted set: score=mesaj sayısı
   botMood: "sostevie:botMood",
+  lastMoodAnnounce: "sostevie:lastMoodAnnounce",
+  lastAwardsRun: "sostevie:lastAwardsRun",
 } as const;
 
 const chatterKey = (u: string) => `sostevie:chatter:${u.toLowerCase()}`;
@@ -232,4 +234,18 @@ export async function getLastNewsRun(): Promise<number> {
 
 export async function setLastNewsRun(ts: number): Promise<void> {
   await db().set(K.lastNewsRun, ts);
+}
+
+export async function getLastMoodAnnounce(): Promise<number> {
+  return (await db().get<number>(K.lastMoodAnnounce)) ?? 0;
+}
+export async function setLastMoodAnnounce(ts: number): Promise<void> {
+  await db().set(K.lastMoodAnnounce, ts);
+}
+
+export async function getLastAwardsRun(): Promise<number> {
+  return (await db().get<number>(K.lastAwardsRun)) ?? 0;
+}
+export async function setLastAwardsRun(ts: number): Promise<void> {
+  await db().set(K.lastAwardsRun, ts);
 }

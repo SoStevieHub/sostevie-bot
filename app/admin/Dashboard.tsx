@@ -98,8 +98,8 @@ export default function Dashboard({ categories }: { categories: { id: string; la
     } else flash("Kaydetme hatası");
   }
 
-  async function action(action: "test" | "news") {
-    flash(action === "test" ? "Test mesajı gönderiliyor…" : "Haber aranıyor…");
+  async function action(action: "test" | "news" | "awards") {
+    flash(action === "test" ? "Test mesajı gönderiliyor…" : action === "awards" ? "Ödüller hazırlanıyor…" : "Haber aranıyor…");
     const res = await fetch("/api/admin/actions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -107,6 +107,7 @@ export default function Dashboard({ categories }: { categories: { id: string; la
     });
     const j = await res.json();
     if (action === "news") flash(j.posted ? "Haber paylaşıldı ✓" : `Atlandı: ${j.reason ?? j.error}`);
+    else if (action === "awards") flash(j.posted ? `Ödüller paylaşıldı ✓ (${j.count})` : `Atlandı: ${j.reason ?? j.error}`);
     else flash(j.ok ? "Test mesajı gönderildi ✓" : `Hata: ${j.error}`);
     loadStatus();
   }
@@ -156,6 +157,7 @@ export default function Dashboard({ categories }: { categories: { id: string; la
             </a>
             <button onClick={() => action("test")} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 px-4 py-2 text-sm">Test mesajı at</button>
             <button onClick={() => action("news")} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 px-4 py-2 text-sm">Şimdi haber paylaş</button>
+            <button onClick={() => action("awards")} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 px-4 py-2 text-sm">Ödülleri paylaş</button>
           </div>
           <p className="mt-2 text-xs text-neutral-500">
             Önce <b>yayıncı</b> hesabını (incognito'da SoStevie) bağla — sohbet okuma açılır. Sonra <b>bot</b> hesabını (incognito'da BotStevie) bağla — mesajları o atar.

@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { isAuthed } from "@/lib/auth";
 import { getChannelBroadcasterId, sendChatMessage } from "@/lib/kick/api";
-import { runNewsTick } from "@/lib/bot";
+import { runNewsTick, runAwardsTick } from "@/lib/bot";
 import { addLog } from "@/lib/store";
 import { finalizeMessage } from "@/lib/moderation";
 
@@ -25,6 +25,11 @@ export async function POST(req: Request) {
 
   if (action === "news") {
     const r = await runNewsTick();
+    return NextResponse.json(r);
+  }
+
+  if (action === "awards") {
+    const r = await runAwardsTick();
     return NextResponse.json(r);
   }
 

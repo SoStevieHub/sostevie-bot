@@ -3,9 +3,13 @@ import crypto from "node:crypto";
 import {
   getSettings, getToken, addLog, getRecentPostedNews, addPostedNews, hasPostedNews,
   recordChatterMessage, updateChatterNotes, getMood, nudgeMood,
+  getLastMoodAnnounce, setLastMoodAnnounce, getTopChatters,
 } from "./store";
 import { getChannelBroadcasterId, sendChatMessage } from "./kick/api";
-import { generateReply, findBreakingNews, summarizeChatter } from "./ai/engine";
+import {
+  generateReply, findBreakingNews, summarizeChatter,
+  generateMoodAnnouncement, generateWeeklyAwards,
+} from "./ai/engine";
 import { detectInsult, classifyMention, finalizeMessage, formatNews } from "./moderation";
 import { config } from "./config";
 
@@ -90,6 +94,62 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
     const notes = await summarizeChatter(msg.username, chatter.recent, chatter.notes);
     await updateChatterNotes(msg.username, notes);
   }
+
+  // Ara sıra ruh halini ilan et: belirgin mood + nadir tetik + en az 30 dk arayla (spam değil).
+  if (Math.abs(mood.score) >= 35 && Math.random() * 100 < 2) {
+    const since = Date.now() - (await getLastMoodAnnounce());
+    if (since > 30 * 60_000) {
+      await setLastMoodAnnounce(Date.now());
+      try {
+        const line = await generateMoodAnnouncement(mood.score, settings.persona);
+        if (line) {
+          const text = finalizeMessage(line, { isInsult: false });
+          const sent = await sendChatMessage(msg.broadcasterUserId, text);
+          if (sent.ok) await addLog({ direction: "out", kind: "reply", username: "(ruh hali)", content: text });
+        }
+      } catch (e) {
+        console.error("[bot] mood ilanı hatası:", e);
+      }
+    }
+  }
+}
+
+// Haftalık topluluk ödülleri turu — hafızadan komik ödüller üretip paylaşır.
+export async function runAwardsTick(): Promise<{ posted: boolean; reason?: string; count?: number }> {
+  const settings = await getSettings();
+  if (!settings.botEnabled) return { posted: false, reason: "bot kapalı" };
+
+  const broadcasterId = await getChannelBroadcasterId();
+  if (!broadcasterId) return { posted: false, reason: "kanal/token yok" };
+
+  const chatters = await getTopChatters(20);
+  if (chatters.length < 3) return { posted: false, reason: "yeterli chatter verisi yok" };
+
+  let lines: string[];
+  try {
+    lines = await generateWeeklyAwards(
+      chatters.map((c) => ({ username: c.username, count: c.count, notes: c.notes })),
+    );
+  } catch (e) {
+    console.error("[bot] ödül üretme hatası:", e);
+    return { posted: false, reason: "ai hatası" };
+  }
+  if (lines.length === 0) return { posted: false, reason: "ödül üretilemedi" };
+
+  // Başlık + ödülleri sırayla gönder (her biri ayrı mesaj).
+  const intro = "🏆 HAFTANIN TOPLULUK ÖDÜLLERİ 🏆";
+  const all = [intro, ...lines];
+  let sentCount = 0;
+  for (const line of all) {
+    const text = finalizeMessage(line, { isInsult: false });
+    const sent = await sendChatMessage(broadcasterId, text);
+    if (sent.ok) {
+      sentCount += 1;
+      await addLog({ direction: "out", kind: "news", username: "(ödüller)", content: text });
+    }
+    await new Promise((r) => setTimeout(r, 1500)); // mesajları aralıkla
+  }
+  return { posted: sentCount > 0, count: sentCount };
 }
 
 function newsHash(title: string): string {

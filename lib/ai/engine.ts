@@ -100,6 +100,42 @@ export async function summarizeChatter(username: string, recent: string[], oldNo
   }
 }
 
+// Botun ruh halini chat'e ilan eden tek kısa mesaj.
+export async function generateMoodAnnouncement(moodScore: number, persona: string): Promise<string> {
+  const system = [
+    persona,
+    "Elit, zeki, az ve öz üslup. Klişe yok.",
+    `Şu an ruh halin: ${moodLabel(moodScore)} (${moodScore}/100). Chat seni bu hale getirdi.`,
+    `Ruh halini chat'e DUYURAN, kendinden bahseden, ${MAX_MESSAGE_LENGTH} karakteri aşmayan tek bir mesaj yaz. Keyifliysen cömert/oyuncu, gerginsen sitemkâr/sivri. "Beni siz böyle yaptınız" havası olabilir.`,
+  ].join("\n");
+  return chat(system, "Ruh halini tek mesajla ilan et.", { temperature: 0.9, maxTokens: 150 });
+}
+
+// Hafızadan komik "haftalık topluluk ödülleri" üretir (her satır bir ödül).
+export async function generateWeeklyAwards(
+  chatters: { username: string; count: number; notes: string }[],
+): Promise<string[]> {
+  if (chatters.length === 0) return [];
+  const list = chatters
+    .map((c) => `@${c.username} — ${c.count} mesaj${c.notes ? `; profil: ${c.notes}` : ""}`)
+    .join("\n");
+  const system =
+    "Sen elit, esprili bir Kick botusun. Topluluk için komik 'haftanın ödülleri'ni dağıtırsın. Verilen GERÇEK chatter verisine dayan, isim uydurma.";
+  const prompt = [
+    "Aşağıdaki chatter verisinden komik ödüller dağıt. Kategoriler (uygun olanları seç): En Sadık, Haftanın Trolü, En Çok Laf Sokan, Yükselen Yıldız, En Aktif, Kanalın Demirbaşı vb.",
+    "Her ödül AYRI bir satır olsun, formatı: '🏆 <Ödül>: @kullanıcı — kısa esprili gerekçe'. En fazla 5 ödül. Her satır 300 karakteri aşmasın.",
+    "SADECE ödül satırlarını döndür, başka açıklama yok.",
+    "",
+    list,
+  ].join("\n");
+  const raw = await chat(system, prompt, { temperature: 0.8, maxTokens: 500 });
+  return raw
+    .split("\n")
+    .map((l) => l.replace(/^[-*\d.]+\s*/, "").trim())
+    .filter((l) => l.length > 5)
+    .slice(0, 5);
+}
+
 export type NewsItem = { title: string; summary: string; url: string; category: string };
 
 // Seçili kategorilerde RSS'ten haber çek, Groq ile EN ÖNEMLİSİNİ seç + özetle.
