@@ -15,6 +15,9 @@ export type ReplyInput = {
   ownerProfile: string;
   defendOwner: boolean;
   isFromOwner: boolean;
+  chatterCount: number; // bu kullanıcının toplam mesaj sayısı
+  chatterNotes: string; // botun bu kullanıcı için öğrendiği profil
+  chatterRecent: string[]; // son mesajları
 };
 
 // İzleyiciye sohbet cevabı üret. Soru ise (ve arama varsa) web'den bağlam ekler.
@@ -29,6 +32,15 @@ export async function generateReply(input: ReplyInput): Promise<string> {
   ];
   if (input.isFromOwner) {
     rules.push("Şu an YAYINCININ KENDİSİYLE konuşuyorsun. Sıcak, saygılı ve hafifçe takdir eden ol; onu küçük düşürme.");
+  }
+  // Chatter'ı tanı: geçmişine göre davran.
+  if (input.chatterCount > 1 && !input.isFromOwner) {
+    const recent = input.chatterRecent.slice(-6).map((m) => `- ${m}`).join("\n");
+    rules.push(
+      `BU CHATTER'I TANIYORSUN (${input.chatterCount} mesajdır burada).` +
+        (input.chatterNotes ? ` Hakkında bildiklerin: ${input.chatterNotes}.` : "") +
+        `\nSon mesajlarından bazıları:\n${recent}\nOna tanıdık biri gibi, kişiliğine ve geçmiş tavrına uygun davran (dostsa sıcak, troll'se mesafeli/iğneli).`,
+    );
   }
   if (input.defendOwner) {
     rules.push(
@@ -54,6 +66,27 @@ export async function generateReply(input: ReplyInput): Promise<string> {
 
   const prompt = `Kullanıcı adı: ${input.username}\nMesajı: "${input.userMessage}"${context}\n\nBuna tek bir sohbet mesajıyla cevap ver.`;
   return chat(rules.join("\n"), prompt, { temperature: 0.9, maxTokens: 300 });
+}
+
+// Bir chatter hakkında kısa profil notu çıkar/güncelle (zamanla "öğrenme").
+export async function summarizeChatter(username: string, recent: string[], oldNotes: string): Promise<string> {
+  const system =
+    "Sen bir topluluk gözlemcisisin. Bir Kick chatter'ı hakkında ÇOK KISA (en fazla 280 karakter) tek paragraf profil notu çıkarırsın: konuşma tarzı, ilgi alanları, bota ve yayıncıya tavrı (dost/troll/nötr), genel tonu. Türkçe.";
+  const prompt = [
+    `Chatter: ${username}`,
+    `Mevcut not: ${oldNotes || "(yok)"}`,
+    "Son mesajları:",
+    recent.map((m) => `- ${m}`).join("\n"),
+    "",
+    "Bu bilgilere göre GÜNCELLENMİŞ kısa profil notunu yaz (max 280 karakter, tek paragraf).",
+  ].join("\n");
+  try {
+    const out = await chat(system, prompt, { temperature: 0.4, maxTokens: 150 });
+    return out.replace(/\s+/g, " ").trim().slice(0, 400);
+  } catch (e) {
+    console.error("[chatter] not güncelleme hatası:", e);
+    return oldNotes;
+  }
 }
 
 export type NewsItem = { title: string; summary: string; url: string; category: string };

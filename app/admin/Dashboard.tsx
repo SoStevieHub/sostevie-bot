@@ -35,6 +35,14 @@ type Status = {
   kickConfigured: boolean;
   publicBaseUrl: string;
   logs: LogRow[];
+  chatters: ChatterRow[];
+};
+
+type ChatterRow = {
+  username: string;
+  count: number;
+  lastSeen: number;
+  notes: string;
 };
 
 export default function Dashboard({ categories }: { categories: { id: string; label: string }[] }) {
@@ -44,7 +52,14 @@ export default function Dashboard({ categories }: { categories: { id: string; la
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
 
-  const load = useCallback(async () => {
+  // Sadece durum/logları tazeler — ayar kutularına (yazarken) DOKUNMAZ.
+  const loadStatus = useCallback(async () => {
+    const st = await fetch("/api/admin/status").then((r) => r.json());
+    setStatus(st);
+  }, []);
+
+  // İlk yüklemede ayarları da çeker (sadece bir kez).
+  const loadAll = useCallback(async () => {
     const [s, st] = await Promise.all([
       fetch("/api/admin/settings").then((r) => r.json()),
       fetch("/api/admin/status").then((r) => r.json()),
@@ -54,13 +69,13 @@ export default function Dashboard({ categories }: { categories: { id: string; la
   }, []);
 
   useEffect(() => {
-    load();
+    loadAll();
     const params = new URLSearchParams(window.location.search);
     if (params.get("kick") === "ok") setToast(`Bot bağlandı ✓ (abonelik: ${params.get("sub")})`);
     if (params.get("kick") === "error") setToast(`Bağlantı hatası: ${params.get("msg")}`);
-    const t = setInterval(load, 15000); // logları tazele
+    const t = setInterval(loadStatus, 15000); // sadece logları/durumu tazele
     return () => clearInterval(t);
-  }, [load]);
+  }, [loadAll, loadStatus]);
 
   function flash(msg: string) {
     setToast(msg);
@@ -92,7 +107,7 @@ export default function Dashboard({ categories }: { categories: { id: string; la
     const j = await res.json();
     if (action === "news") flash(j.posted ? "Haber paylaşıldı ✓" : `Atlandı: ${j.reason ?? j.error}`);
     else flash(j.ok ? "Test mesajı gönderildi ✓" : `Hata: ${j.error}`);
-    load();
+    loadStatus();
   }
 
   async function logout() {
@@ -213,6 +228,24 @@ export default function Dashboard({ categories }: { categories: { id: string; la
             {saving ? "Kaydediliyor…" : "Ayarları kaydet"}
           </button>
         </div>
+
+        {/* Tanınan chatter'lar */}
+        <Card title="Tanınan chatter'lar (bot zamanla öğreniyor)">
+          <div className="space-y-2 max-h-96 overflow-auto text-sm">
+            {(!status.chatters || status.chatters.length === 0) && (
+              <p className="text-neutral-500">Henüz chatter tanınmadı. Sohbet ettikçe burada birikecek.</p>
+            )}
+            {status.chatters?.map((c) => (
+              <div key={c.username} className="py-2 border-b border-neutral-800/60">
+                <div className="flex justify-between">
+                  <span className="text-neutral-200 font-medium">{c.username}</span>
+                  <span className="text-neutral-500 text-xs">{c.count} mesaj</span>
+                </div>
+                {c.notes && <p className="text-neutral-400 text-xs mt-1">{c.notes}</p>}
+              </div>
+            ))}
+          </div>
+        </Card>
 
         {/* Loglar */}
         <Card title="Son mesajlar">

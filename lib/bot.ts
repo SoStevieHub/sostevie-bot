@@ -1,8 +1,11 @@
 // Bot çekirdeği — gelen mesaja cevap kararı ve periyodik haber paylaşımı.
 import crypto from "node:crypto";
-import { getSettings, getToken, addLog, getRecentPostedNews, addPostedNews, hasPostedNews } from "./store";
+import {
+  getSettings, getToken, addLog, getRecentPostedNews, addPostedNews, hasPostedNews,
+  recordChatterMessage, updateChatterNotes,
+} from "./store";
 import { getChannelBroadcasterId, sendChatMessage } from "./kick/api";
-import { generateReply, findBreakingNews } from "./ai/engine";
+import { generateReply, findBreakingNews, summarizeChatter } from "./ai/engine";
 import { detectInsult, classifyMention, finalizeMessage, formatNews } from "./moderation";
 import { config } from "./config";
 
@@ -26,6 +29,9 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   if (botUsername && msg.username.toLowerCase() === botUsername.toLowerCase()) return;
   if (!msg.content.trim()) return;
 
+  // Chatter'ı tanı/kaydet (herkesten öğren — cevap versek de vermesek de).
+  const chatter = await recordChatterMessage(msg.username, msg.content);
+
   const isInsult = detectInsult(msg.content);
   const { mentioned, isQuestion } = classifyMention(msg.content, botUsername);
 
@@ -39,35 +45,44 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   // Cevap kararı: etiket/hakaret/sahibine saldırı -> her zaman; aksi halde olasılıkla.
   const mustReply = mentioned || isInsult || attackOnOwner;
   const randomReply = Math.random() * 100 < settings.randomReplyPercent;
-  if (!mustReply && !randomReply) return;
-
-  try {
-    const raw = await generateReply({
-      userMessage: msg.content,
-      username: msg.username,
-      isInsult,
-      isQuestion: isQuestion && mentioned, // sadece bota yönelik soruları araştır
-      persona: settings.persona,
-      toxicMode: settings.toxicModeEnabled,
-      ownerName,
-      ownerProfile: settings.ownerProfile,
-      defendOwner: settings.defendOwner,
-      isFromOwner,
-    });
-    if (!raw) return;
-
-    const text = finalizeMessage(raw, { isInsult });
-    const sent = await sendChatMessage(msg.broadcasterUserId, text);
-    if (sent.ok) {
-      await addLog({
-        direction: "out",
-        kind: isInsult ? "insult" : "reply",
+  if (mustReply || randomReply) {
+    try {
+      const raw = await generateReply({
+        userMessage: msg.content,
         username: msg.username,
-        content: text,
+        isInsult,
+        isQuestion: isQuestion && mentioned, // sadece bota yönelik soruları araştır
+        persona: settings.persona,
+        toxicMode: settings.toxicModeEnabled,
+        ownerName,
+        ownerProfile: settings.ownerProfile,
+        defendOwner: settings.defendOwner,
+        isFromOwner,
+        chatterCount: chatter.count,
+        chatterNotes: chatter.notes,
+        chatterRecent: chatter.recent,
       });
+      if (raw) {
+        const text = finalizeMessage(raw, { isInsult });
+        const sent = await sendChatMessage(msg.broadcasterUserId, text);
+        if (sent.ok) {
+          await addLog({
+            direction: "out",
+            kind: isInsult ? "insult" : "reply",
+            username: msg.username,
+            content: text,
+          });
+        }
+      }
+    } catch (e) {
+      console.error("[bot] cevap üretme hatası:", e);
     }
-  } catch (e) {
-    console.error("[bot] cevap üretme hatası:", e);
+  }
+
+  // Zamanla öğren: her 8 mesajda bir bu chatter'ın profilini güncelle.
+  if (chatter.count % 8 === 0 && !isFromOwner) {
+    const notes = await summarizeChatter(msg.username, chatter.recent, chatter.notes);
+    await updateChatterNotes(msg.username, notes);
   }
 }
 

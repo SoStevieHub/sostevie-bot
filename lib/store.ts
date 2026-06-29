@@ -78,7 +78,10 @@ const K = {
   log: "sostevie:log",
   logSeq: "sostevie:log:seq",
   lastNewsRun: "sostevie:lastNewsRun",
+  chatterIndex: "sostevie:chatters", // sorted set: score=mesaj sayısı
 } as const;
+
+const chatterKey = (u: string) => `sostevie:chatter:${u.toLowerCase()}`;
 
 export type Role = "reader" | "writer";
 
@@ -150,6 +153,54 @@ export async function addLog(entry: Omit<MessageLog, "id" | "createdAt">): Promi
 
 export async function getLogs(limit = 100): Promise<MessageLog[]> {
   return (await db().lrange<MessageLog>(K.log, 0, limit - 1)) ?? [];
+}
+
+// ---- Chatter hafızası (bot kullanıcıları tanır, zamanla öğrenir) ----
+export type Chatter = {
+  username: string;
+  count: number;
+  firstSeen: number;
+  lastSeen: number;
+  recent: string[]; // son birkaç mesajı
+  notes: string; // botun çıkardığı kısa profil
+};
+
+const CHATTER_RECENT_MAX = 8;
+
+export async function getChatter(username: string): Promise<Chatter | null> {
+  return (await db().get<Chatter>(chatterKey(username))) ?? null;
+}
+
+// Gelen her mesajı kaydeder (sayaç + son mesajlar + index). Güncel kaydı döner.
+export async function recordChatterMessage(username: string, content: string): Promise<Chatter> {
+  const now = Date.now();
+  const c = (await getChatter(username)) ?? {
+    username,
+    count: 0,
+    firstSeen: now,
+    lastSeen: now,
+    recent: [],
+    notes: "",
+  };
+  c.count += 1;
+  c.lastSeen = now;
+  c.recent = [...c.recent, content].slice(-CHATTER_RECENT_MAX);
+  await db().set(chatterKey(username), c);
+  await db().zadd(K.chatterIndex, { score: c.count, member: username.toLowerCase() });
+  return c;
+}
+
+export async function updateChatterNotes(username: string, notes: string): Promise<void> {
+  const c = await getChatter(username);
+  if (!c) return;
+  c.notes = notes.slice(0, 400);
+  await db().set(chatterKey(username), c);
+}
+
+export async function getTopChatters(limit = 15): Promise<Chatter[]> {
+  const names = (await db().zrange<string[]>(K.chatterIndex, 0, limit - 1, { rev: true })) ?? [];
+  const items = await Promise.all(names.map((n) => getChatter(n)));
+  return items.filter((x): x is Chatter => !!x);
 }
 
 // ---- Cron: son haber turu zamanı ----

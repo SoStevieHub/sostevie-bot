@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
 import { isAuthed } from "@/lib/auth";
-import { getToken, getLogs, getBroadcasterId } from "@/lib/store";
+import { getToken, getLogs, getBroadcasterId, getTopChatters } from "@/lib/store";
 import { config } from "@/lib/config";
 import { configuredProviders } from "@/lib/ai/llm";
 
 export async function GET() {
   if (!(await isAuthed())) return NextResponse.json({ error: "yetkisiz" }, { status: 401 });
 
-  const [reader, writer, broadcasterId, logs] = await Promise.all([
+  const [reader, writer, broadcasterId, logs, chatters] = await Promise.all([
     getToken("reader"),
     getToken("writer"),
     getBroadcasterId(),
     getLogs(60),
+    getTopChatters(15),
   ]);
 
   return NextResponse.json({
@@ -26,5 +27,6 @@ export async function GET() {
     kickConfigured: !!config.kick.clientId && !!config.kick.clientSecret,
     publicBaseUrl: config.publicBaseUrl,
     logs,
+    chatters,
   });
 }
