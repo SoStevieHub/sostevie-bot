@@ -2,7 +2,7 @@
 import crypto from "node:crypto";
 import {
   getSettings, getToken, addLog, getRecentPostedNews, addPostedNews, hasPostedNews,
-  recordChatterMessage, updateChatterNotes,
+  recordChatterMessage, updateChatterNotes, getMood, nudgeMood,
 } from "./store";
 import { getChannelBroadcasterId, sendChatMessage } from "./kick/api";
 import { generateReply, findBreakingNews, summarizeChatter } from "./ai/engine";
@@ -42,6 +42,11 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
 
   await addLog({ direction: "in", kind: "incoming", username: msg.username, content: msg.content });
 
+  // Ruh hali: chat botu/yayıncıyı nasıl etkiliyor (hakaret düşürür, dostça hitap yükseltir).
+  if (isInsult || attackOnOwner) await nudgeMood(-6);
+  else if (mentioned) await nudgeMood(2);
+  const mood = await getMood();
+
   // Cevap kararı: etiket/hakaret/sahibine saldırı -> her zaman; aksi halde olasılıkla.
   const mustReply = mentioned || isInsult || attackOnOwner;
   const randomReply = Math.random() * 100 < settings.randomReplyPercent;
@@ -61,6 +66,7 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
         chatterCount: chatter.count,
         chatterNotes: chatter.notes,
         chatterRecent: chatter.recent,
+        moodScore: mood.score,
       });
       if (raw) {
         const text = finalizeMessage(raw, { isInsult });

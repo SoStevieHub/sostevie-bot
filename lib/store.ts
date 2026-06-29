@@ -79,6 +79,7 @@ const K = {
   logSeq: "sostevie:log:seq",
   lastNewsRun: "sostevie:lastNewsRun",
   chatterIndex: "sostevie:chatters", // sorted set: score=mesaj sayısı
+  botMood: "sostevie:botMood",
 } as const;
 
 const chatterKey = (u: string) => `sostevie:chatter:${u.toLowerCase()}`;
@@ -201,6 +202,27 @@ export async function getTopChatters(limit = 15): Promise<Chatter[]> {
   const names = (await db().zrange<string[]>(K.chatterIndex, 0, limit - 1, { rev: true })) ?? [];
   const items = await Promise.all(names.map((n) => getChatter(n)));
   return items.filter((x): x is Chatter => !!x);
+}
+
+// ---- Bot ruh hali (chat onu şekillendirir) ----
+export type BotMood = { score: number; updatedAt: number };
+
+// Zamanla nötre çeker (decay: saatte ~5 puan); -100..100.
+export async function getMood(): Promise<BotMood> {
+  const m = await db().get<BotMood>(K.botMood);
+  if (!m) return { score: 0, updatedAt: Date.now() };
+  const hours = (Date.now() - m.updatedAt) / 3_600_000;
+  const decayed =
+    m.score > 0 ? Math.max(0, m.score - hours * 5) : Math.min(0, m.score + hours * 5);
+  return { score: Math.round(decayed), updatedAt: m.updatedAt };
+}
+
+export async function nudgeMood(delta: number): Promise<BotMood> {
+  const cur = await getMood();
+  const score = Math.max(-100, Math.min(100, cur.score + delta));
+  const m: BotMood = { score, updatedAt: Date.now() };
+  await db().set(K.botMood, m);
+  return m;
 }
 
 // ---- Cron: son haber turu zamanı ----

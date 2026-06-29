@@ -16,8 +16,9 @@ export type ReplyInput = {
   defendOwner: boolean;
   isFromOwner: boolean;
   chatterCount: number; // bu kullanıcının toplam mesaj sayısı
-  chatterNotes: string; // botun bu kullanıcı için öğrendiği profil
+  chatterNotes: string; // botun bu kullanıcı için öğrendiği profil (lakap/espriler dahil)
   chatterRecent: string[]; // son mesajları
+  moodScore: number; // botun ruh hali -100..100
 };
 
 // İzleyiciye sohbet cevabı üret. Soru ise (ve arama varsa) web'den bağlam ekler.
@@ -28,18 +29,20 @@ export async function generateReply(input: ReplyInput): Promise<string> {
     "KARŞI TARAFIN ÜSLUBUNA GÖRE AYAR YAP: seviyeli/sakin konuşana zekâ ve nüktedanlıkla; laubali olana iğneyle; agresif/küfürlü olana aynı sertlikte karşılık ver. Aynaya bak gibi onun tonunu yansıt.",
     `Cevabın TEK mesaj ve yaklaşık 280 (en fazla ${MAX_MESSAGE_LENGTH}) karakter olmalı. Kısa tut ama cümleni MUTLAKA tamamla; sözünü yarıda bırakma, cümle ortasında kesme.`,
     "Türkçe yaz. Emoji'yi abartma. Markdown veya tırnak kullanma, düz sohbet mesajı yaz.",
+    `ŞU ANKİ RUH HALİN: ${moodLabel(input.moodScore)} (${input.moodScore}/100). Bu havaya göre konuş: keyifliysen daha sıcak, eli açık ve oyuncu; gerginsen daha kısa, aksi ve sivri dilli. Chat sana nasıl davrandıysa ruh halin ona göre.`,
     `KANAL SAHİBİ (yayıncı): ${input.ownerName || "yayıncı"}. Hakkında: ${input.ownerProfile}. Ona sadıksın: hep arkasında durur, olumlu konuşur, asla kötülemezsin. Zevklerine (örn. Pink Floyd, Grunge) uygun yerde olumlu gönderme yapabilirsin. Ama yağcı/yapışkan olma, elit ve ölçülü kal.`,
   ];
   if (input.isFromOwner) {
     rules.push("Şu an YAYINCININ KENDİSİYLE konuşuyorsun. Sıcak, saygılı ve hafifçe takdir eden ol; onu küçük düşürme.");
   }
-  // Chatter'ı tanı: geçmişine göre davran.
+  // Chatter'ı tanı: geçmişine göre davran (lore/ilişki).
   if (input.chatterCount > 1 && !input.isFromOwner) {
     const recent = input.chatterRecent.slice(-6).map((m) => `- ${m}`).join("\n");
     rules.push(
       `BU CHATTER'I TANIYORSUN (${input.chatterCount} mesajdır burada).` +
-        (input.chatterNotes ? ` Hakkında bildiklerin: ${input.chatterNotes}.` : "") +
-        `\nSon mesajlarından bazıları:\n${recent}\nOna tanıdık biri gibi, kişiliğine ve geçmiş tavrına uygun davran (dostsa sıcak, troll'se mesafeli/iğneli).`,
+        (input.chatterNotes ? ` Hakkında bildiklerin (lakap/espriler/geçmiş dahil): ${input.chatterNotes}.` : "") +
+        `\nSon mesajlarından bazıları:\n${recent}` +
+        "\nKurallar: Notlarındaki LAKABI kullan. Aranızdaki running joke'lara/geçmişe gönderme yap (callback). Dostsa sıcak ve içten; troll/ters biriyse eski tavrını hatırlat ve iğnele. Onunla SÜREN bir ilişkin/hikâyen varmış gibi davran, ilk kez konuşuyormuş gibi değil.",
     );
   }
   if (input.defendOwner) {
@@ -68,17 +71,25 @@ export async function generateReply(input: ReplyInput): Promise<string> {
   return chat(rules.join("\n"), prompt, { temperature: 0.9, maxTokens: 300 });
 }
 
-// Bir chatter hakkında kısa profil notu çıkar/güncelle (zamanla "öğrenme").
+function moodLabel(score: number): string {
+  if (score > 50) return "çok keyifli ve cömert";
+  if (score > 20) return "keyifli";
+  if (score < -50) return "iyice gergin, sabrı taşmış, zehirli";
+  if (score < -20) return "gergin ve aksi";
+  return "normal";
+}
+
+// Bir chatter hakkında kısa profil notu çıkar/güncelle (zamanla "öğrenme" + lore).
 export async function summarizeChatter(username: string, recent: string[], oldNotes: string): Promise<string> {
   const system =
-    "Sen bir topluluk gözlemcisisin. Bir Kick chatter'ı hakkında ÇOK KISA (en fazla 280 karakter) tek paragraf profil notu çıkarırsın: konuşma tarzı, ilgi alanları, bota ve yayıncıya tavrı (dost/troll/nötr), genel tonu. Türkçe.";
+    "Sen bir topluluk gözlemcisisin. Bir Kick chatter'ı için ÇOK KISA (en fazla 280 karakter) tek paragraf 'ilişki notu' tutarsın. İçinde: ona taktığın esprili bir LAKAP, konuşma tarzı/ilgi alanları, bota ve yayıncıya tavrı (dost/troll/nötr), ve varsa aranızdaki running joke veya olay. Türkçe, tek paragraf.";
   const prompt = [
     `Chatter: ${username}`,
-    `Mevcut not: ${oldNotes || "(yok)"}`,
+    `Mevcut not: ${oldNotes || "(yok — ilk kez, ona bir lakap tak)"}`,
     "Son mesajları:",
     recent.map((m) => `- ${m}`).join("\n"),
     "",
-    "Bu bilgilere göre GÜNCELLENMİŞ kısa profil notunu yaz (max 280 karakter, tek paragraf).",
+    "GÜNCELLENMİŞ ilişki notunu yaz (lakap + kişilik + tavır + varsa espri; max 280 karakter, tek paragraf).",
   ].join("\n");
   try {
     const out = await chat(system, prompt, { temperature: 0.4, maxTokens: 150 });

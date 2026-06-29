@@ -36,6 +36,7 @@ type Status = {
   publicBaseUrl: string;
   logs: LogRow[];
   chatters: ChatterRow[];
+  moodScore: number;
 };
 
 type ChatterRow = {
@@ -144,6 +145,7 @@ export default function Dashboard({ categories }: { categories: { id: string; la
             <Stat label="Bot (mesaj atar)" ok={status.writerConnected} text={status.writerConnected ? `@${status.writerUsername}` : "bağlı değil"} />
             <Stat label="LLM sağlayıcıları" ok={status.llmProviders.length > 0} text={status.llmProviders.length ? status.llmProviders.join(", ") : "eksik (.env)"} />
             <Stat label="Bot durumu" ok={settings.botEnabled} text={settings.botEnabled ? "açık" : "duraklatıldı"} />
+            <Stat label="Bot ruh hali" ok={status.moodScore >= -20} text={moodText(status.moodScore)} />
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <a href="/api/kick/oauth/start?role=reader" className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-medium">
@@ -263,6 +265,11 @@ export default function Dashboard({ categories }: { categories: { id: string; la
       </div>
     </div>
   );
+}
+
+function moodText(s: number) {
+  const face = s > 50 ? "😎" : s > 20 ? "🙂" : s < -50 ? "😡" : s < -20 ? "😒" : "😐";
+  return `${face} ${s}`;
 }
 
 function kindLabel(k: string) {
