@@ -20,12 +20,13 @@ export const config = {
   },
   cerebras: {
     apiKey: req("CEREBRAS_API_KEY"),
-    // Ücretsiz hesapların eriştiği model. 70b erişimin varsa CEREBRAS_MODEL ile değiştir.
-    model: req("CEREBRAS_MODEL", "llama3.1-8b"),
+    // Cerebras ücretsiz kademesinde mevcut. Model değişirse CEREBRAS_MODEL ile ayarla.
+    model: req("CEREBRAS_MODEL", "gpt-oss-120b"),
   },
   openrouter: {
     apiKey: req("OPENROUTER_API_KEY"),
-    model: req("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
+    // :free slug'lar zaman zaman değişir; sorun olursa OPENROUTER_MODEL ile güncelle.
+    model: req("OPENROUTER_MODEL", "deepseek/deepseek-chat-v3-0324:free"),
   },
   // Gemini (OpenAI uyumlu uç) — kotası kısıtlı, zincirde son yedek olarak.
   gemini: {

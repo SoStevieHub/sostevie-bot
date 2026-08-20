@@ -35,26 +35,36 @@ async function callOne(
 ): Promise<string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (p.key) headers.Authorization = `Bearer ${p.key}`;
+
+  // gpt-oss reasoning modelleri: düşünme token'ları content'i yiyip boş bırakabiliyor.
+  // reasoning_effort=low + bol token ile son cevabı garanti et.
+  const isReasoning = /gpt-oss|qwen3|deepseek-r1|:thinking/i.test(p.model);
+  const body: Record<string, unknown> = {
+    model: p.model,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    temperature: opts.temperature ?? 0.9,
+    max_tokens: isReasoning ? Math.max(opts.maxTokens ?? 300, 900) : opts.maxTokens ?? 300,
+  };
+  if (isReasoning) body.reasoning_effort = "low";
+
   const res = await fetch(p.url, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      model: p.model,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      temperature: opts.temperature ?? 0.9,
-      max_tokens: opts.maxTokens ?? 300,
-    }),
-    signal: AbortSignal.timeout(20000),
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(25000),
   });
   if (!res.ok) {
     const t = await res.text();
     throw new Error(`${p.name} ${res.status}: ${t.slice(0, 150)}`);
   }
-  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const content = (json.choices?.[0]?.message?.content ?? "").trim();
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string; reasoning?: string } }[];
+  };
+  const msg = json.choices?.[0]?.message;
+  const content = (msg?.content || msg?.reasoning || "").trim();
   if (!content) throw new Error(`${p.name}: boş yanıt`);
   return content;
 }
