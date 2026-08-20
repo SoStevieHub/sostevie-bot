@@ -13,9 +13,10 @@ export const config = {
   // Sohbet için sağlayıcı zinciri — sırayla denenir, biri limit yerse diğerine geçer.
   groq: {
     apiKey: req("GROQ_API_KEY"),
-    model: req("GROQ_MODEL", "llama-3.3-70b-versatile"),
-    // Yüksek limitli yedek (70b dakikalık limite vurunca devralır).
-    fallbackModel: req("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant"),
+    // Not: eski llama-3.3-70b / 3.1-8b Groq'ta 17 Haz 2026'da kaldırıldı → gpt-oss.
+    model: req("GROQ_MODEL", "openai/gpt-oss-120b"),
+    // Yüksek limitli yedek (ana model limite vurunca devralır).
+    fallbackModel: req("GROQ_FALLBACK_MODEL", "openai/gpt-oss-20b"),
   },
   cerebras: {
     apiKey: req("CEREBRAS_API_KEY"),
