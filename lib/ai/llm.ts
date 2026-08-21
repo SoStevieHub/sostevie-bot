@@ -7,11 +7,11 @@ type Provider = { name: string; url: string; key?: string; model: string };
 function providers(): Provider[] {
   const p: Provider[] = [];
   const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
-  if (config.groq.apiKey)
-    p.push({ name: "groq-70b", url: groqUrl, key: config.groq.apiKey, model: config.groq.model });
-  // Groq'un yüksek limitli yedek modeli (70b dolunca devralır, ayrı kota).
+  // Yüksek limitli/hızlı model ÖNCE (yoğun kanalda güvenilirlik), büyük model yedek.
   if (config.groq.apiKey && config.groq.fallbackModel)
-    p.push({ name: "groq-8b", url: groqUrl, key: config.groq.apiKey, model: config.groq.fallbackModel });
+    p.push({ name: "groq-fast", url: groqUrl, key: config.groq.apiKey, model: config.groq.fallbackModel });
+  if (config.groq.apiKey)
+    p.push({ name: "groq-big", url: groqUrl, key: config.groq.apiKey, model: config.groq.model });
   if (config.cerebras.apiKey)
     p.push({ name: "cerebras", url: "https://api.cerebras.ai/v1/chat/completions", key: config.cerebras.apiKey, model: config.cerebras.model });
   if (config.openrouter.apiKey)
@@ -99,7 +99,8 @@ export async function chat(
       return await callOne(p, system, user, opts);
     } catch (e) {
       errors.push(String(e));
-      console.error(`[llm] ${p.name} başarısız, sıradakine geçiliyor:`, e);
+      // Bu bir HATA değil, normal zincir davranışı (biri dolunca diğerine geçilir).
+      console.warn(`[llm] ${p.name} atlandı (${String(e).slice(0, 80)}), sıradakine geçiliyor`);
     }
   }
   throw new Error("Tüm LLM sağlayıcıları başarısız: " + errors.join(" | "));
