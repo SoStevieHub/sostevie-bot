@@ -8,6 +8,7 @@ export type Settings = {
   newsCategories: string[];
   newsRecencyHours: number;
   randomReplyPercent: number;
+  replyCooldownSeconds: number; // bot en az bu kadar saniyede bir konuşur (spam engeli)
   toxicModeEnabled: boolean;
   persona: string;
   ownerProfile: string; // kanal sahibi hakkında bilinecek/övülecek bilgiler
@@ -58,7 +59,8 @@ const DEFAULT_SETTINGS: Settings = {
   newsIntervalMinutes: 30,
   newsCategories: ["gundem", "sondakika"],
   newsRecencyHours: 6,
-  randomReplyPercent: 5,
+  randomReplyPercent: 4,
+  replyCooldownSeconds: 25,
   toxicModeEnabled: true,
   persona: DEFAULT_PERSONA,
   ownerProfile: DEFAULT_OWNER_PROFILE,
@@ -82,6 +84,7 @@ const K = {
   botMood: "sostevie:botMood",
   lastMoodAnnounce: "sostevie:lastMoodAnnounce",
   lastAwardsRun: "sostevie:lastAwardsRun",
+  lastReply: "sostevie:lastReply", // en son cevap zamanı (global cooldown)
 } as const;
 
 const chatterKey = (u: string) => `sostevie:chatter:${u.toLowerCase()}`;
@@ -248,4 +251,11 @@ export async function getLastAwardsRun(): Promise<number> {
 }
 export async function setLastAwardsRun(ts: number): Promise<void> {
   await db().set(K.lastAwardsRun, ts);
+}
+
+export async function getLastReply(): Promise<number> {
+  return (await db().get<number>(K.lastReply)) ?? 0;
+}
+export async function setLastReply(ts: number): Promise<void> {
+  await db().set(K.lastReply, ts);
 }

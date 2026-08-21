@@ -32,8 +32,9 @@ export function classifyMention(
 ): { mentioned: boolean; isQuestion: boolean } {
   const n = normalize(text);
   const bu = normalize(botUsername);
-  const mentioned =
-    !!bu && (n.includes("@" + bu) || n.includes(bu) || n.includes("bot"));
+  // Sadece @kullanıcıadı ya da tam kullanıcı adı geçerse "bana sesleniyor" say.
+  // (Eskiden bare "bot" da tetikliyordu → "robot", "bu bot iyi" gibi her şeye cevap veriyordu.)
+  const mentioned = !!bu && (n.includes("@" + bu) || n.includes(bu));
   const isQuestion = text.includes("?") || /\b(ne|neden|nasil|nasıl|kim|kac|kaç|nerede|nezaman|ne zaman|mi|mı|mu|mü)\b/i.test(n);
   return { mentioned, isQuestion };
 }

@@ -8,6 +8,7 @@ type Settings = {
   newsCategories: string[];
   newsRecencyHours: number;
   randomReplyPercent: number;
+  replyCooldownSeconds: number;
   toxicModeEnabled: boolean;
   persona: string;
   ownerProfile: string;
@@ -175,6 +176,7 @@ export default function Dashboard({ categories }: { categories: { id: string; la
             onChange={(v) => set("toxicModeEnabled", v)}
           />
           <Range label={`Rastgele cevap olasılığı: %${settings.randomReplyPercent}`} min={0} max={100} value={settings.randomReplyPercent} onChange={(v) => set("randomReplyPercent", v)} />
+          <Range label={`Konuşma arası (cooldown): en az ${settings.replyCooldownSeconds} sn'de bir konuşur`} min={0} max={180} value={settings.replyCooldownSeconds} onChange={(v) => set("replyCooldownSeconds", v)} />
         </Card>
 
         {/* Haber */}

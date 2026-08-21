@@ -4,6 +4,7 @@ import {
   getSettings, getToken, addLog, getRecentPostedNews, addPostedNews, hasPostedNews,
   recordChatterMessage, updateChatterNotes, getMood, nudgeMood,
   getLastMoodAnnounce, setLastMoodAnnounce, getTopChatters,
+  getLastReply, setLastReply,
 } from "./store";
 import { getChannelBroadcasterId, sendChatMessage } from "./kick/api";
 import {
@@ -54,7 +55,12 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   // Cevap kararı: etiket/hakaret/sahibine saldırı -> her zaman; aksi halde olasılıkla.
   const mustReply = mentioned || isInsult || attackOnOwner;
   const randomReply = Math.random() * 100 < settings.randomReplyPercent;
-  if (mustReply || randomReply) {
+
+  // Global cooldown: bot en az replyCooldownSeconds'te bir konuşur (spam engeli).
+  const cooldownOk = Date.now() - (await getLastReply()) >= settings.replyCooldownSeconds * 1000;
+
+  if ((mustReply || randomReply) && cooldownOk) {
+    await setLastReply(Date.now()); // slotu hemen tut (eş zamanlı çift cevabı engelle)
     try {
       const raw = await generateReply({
         userMessage: msg.content,
@@ -95,11 +101,13 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
     await updateChatterNotes(msg.username, notes);
   }
 
-  // Ara sıra ruh halini ilan et: belirgin mood + nadir tetik + en az 30 dk arayla (spam değil).
-  if (Math.abs(mood.score) >= 35 && Math.random() * 100 < 2) {
+  // Ara sıra ruh halini ilan et: belirgin mood + nadir tetik + en az 30 dk arayla + cooldown (spam değil).
+  const moodCooldownOk = Date.now() - (await getLastReply()) >= settings.replyCooldownSeconds * 1000;
+  if (Math.abs(mood.score) >= 35 && Math.random() * 100 < 2 && moodCooldownOk) {
     const since = Date.now() - (await getLastMoodAnnounce());
     if (since > 30 * 60_000) {
       await setLastMoodAnnounce(Date.now());
+      await setLastReply(Date.now());
       try {
         const line = await generateMoodAnnouncement(mood.score, settings.persona);
         if (line) {

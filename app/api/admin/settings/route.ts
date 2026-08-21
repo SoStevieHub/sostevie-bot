@@ -24,6 +24,8 @@ export async function PUT(req: Request) {
     patch.newsRecencyHours = clamp(Number(body.newsRecencyHours), 1, 72);
   if (Number.isFinite(body.randomReplyPercent))
     patch.randomReplyPercent = clamp(Number(body.randomReplyPercent), 0, 100);
+  if (Number.isFinite(body.replyCooldownSeconds))
+    patch.replyCooldownSeconds = clamp(Number(body.replyCooldownSeconds), 0, 600);
   if (Array.isArray(body.newsCategories)) {
     const valid = new Set(NEWS_CATEGORIES.map((c) => c.id));
     patch.newsCategories = body.newsCategories.filter((c) => valid.has(c));
