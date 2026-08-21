@@ -27,6 +27,21 @@ export function configuredProviders(): string[] {
   return providers().map((p) => p.name);
 }
 
+// Teşhis: her sağlayıcıyı tek tek dener, kim çalışıyor kim değil gösterir.
+export async function testAllProviders(): Promise<{ name: string; model: string; ok: boolean; detail: string }[]> {
+  const list = providers();
+  const results: { name: string; model: string; ok: boolean; detail: string }[] = [];
+  for (const p of list) {
+    try {
+      const out = await callOne(p, "Türkçe, tek kısa cümle cevap ver.", "Selam, çalışıyor musun?", { maxTokens: 80 });
+      results.push({ name: p.name, model: p.model, ok: true, detail: out.slice(0, 120) });
+    } catch (e) {
+      results.push({ name: p.name, model: p.model, ok: false, detail: String(e).slice(0, 220) });
+    }
+  }
+  return results;
+}
+
 async function callOne(
   p: Provider,
   system: string,
