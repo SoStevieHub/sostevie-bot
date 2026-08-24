@@ -7,11 +7,12 @@ type Provider = { name: string; url: string; key?: string; model: string };
 function providers(): Provider[] {
   const p: Provider[] = [];
   const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
-  // Yüksek limitli/hızlı model ÖNCE (yoğun kanalda güvenilirlik), büyük model yedek.
-  if (config.groq.apiKey && config.groq.fallbackModel)
-    p.push({ name: "groq-fast", url: groqUrl, key: config.groq.apiKey, model: config.groq.fallbackModel });
+  // Kaliteli model ÖNCE (cooldown çağrı sıklığını düşürdüğü için limit sorunu az),
+  // yüksek limitli küçük model yedek (büyük model dolarsa devralır).
   if (config.groq.apiKey)
     p.push({ name: "groq-big", url: groqUrl, key: config.groq.apiKey, model: config.groq.model });
+  if (config.groq.apiKey && config.groq.fallbackModel)
+    p.push({ name: "groq-fast", url: groqUrl, key: config.groq.apiKey, model: config.groq.fallbackModel });
   if (config.cerebras.apiKey)
     p.push({ name: "cerebras", url: "https://api.cerebras.ai/v1/chat/completions", key: config.cerebras.apiKey, model: config.cerebras.model });
   if (config.openrouter.apiKey)
@@ -76,11 +77,16 @@ async function callOne(
     throw new Error(`${p.name} ${res.status}: ${t.slice(0, 150)}`);
   }
   const json = (await res.json()) as {
-    choices?: { message?: { content?: string; reasoning?: string } }[];
+    choices?: { message?: { content?: string } }[];
   };
-  const msg = json.choices?.[0]?.message;
-  const content = (msg?.content || msg?.reasoning || "").trim();
-  if (!content) throw new Error(`${p.name}: boş yanıt`);
+  // SADECE content kullan (reasoning = ham düşünme metni, anlamsız okunur — asla çıktı verme).
+  let content = (json.choices?.[0]?.message?.content ?? "").trim();
+  // Olası harmony/kanal artıklarını temizle (bazı gpt-oss yanıtlarında görülebilir).
+  content = content
+    .replace(/<\|[^|]*\|>/g, "")
+    .replace(/^(analysis|assistantfinal|final)[:\s]*/i, "")
+    .trim();
+  if (!content) throw new Error(`${p.name}: boş yanıt (content yok)`);
   return content;
 }
 
