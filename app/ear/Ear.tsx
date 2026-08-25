@@ -49,11 +49,13 @@ export default function Ear() {
   const [voiceName, setVoiceName] = useState("");
   const voiceNameRef = useRef("");
   const [saved, setSaved] = useState(false);
-  const [neural, setNeural] = useState(true); // Edge nöral ses (Emel), her tarayıcıda
+  const [neural, setNeural] = useState(true); // StreamElements TTS (Filiz), her tarayıcıda
   const neuralRef = useRef(true);
-  const [neuralVoice, setNeuralVoice] = useState("tr-TR-EmelNeural");
-  const neuralVoiceRef = useRef("tr-TR-EmelNeural");
+  const [neuralVoice, setNeuralVoice] = useState("google");
+  const neuralVoiceRef = useRef("google");
   const hydratedRef = useRef(false); // localStorage yüklenene kadar yazma (varsayılan ezmesin)
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const genRef = useRef(0); // konuşma nesli — durdurunca artırılır, uçuşan istekleri iptal eder
 
   const recRef = useRef<any>(null);
   const listeningRef = useRef(false);
@@ -129,26 +131,50 @@ export default function Ear() {
     window.speechSynthesis.speak(u);
   }, []);
 
+  // Konuşmayı ANINDA kes (barge-in): çalan sesi durdur + uçuşan istekleri iptal et.
+  const stopSpeaking = useCallback(() => {
+    genRef.current += 1;
+    try { window.speechSynthesis?.cancel(); } catch { /* noop */ }
+    if (currentAudioRef.current) {
+      try { currentAudioRef.current.pause(); currentAudioRef.current.src = ""; } catch { /* noop */ }
+      currentAudioRef.current = null;
+    }
+    speakingRef.current = false;
+    lastSpokeEndRef.current = Date.now();
+  }, []);
+
   const speak = useCallback(async (text: string) => {
     if (!ttsRef.current) return;
+    const myGen = ++genRef.current;
     if (neuralRef.current) {
       try {
         speakingRef.current = true; // ses gelene kadar da dinlemeyi kes (feedback engeli)
+        // Sunucu üstünden ücretsiz Türkçe TTS (Google Translate), MP3 döner.
         const res = await fetch("/api/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text, voice: neuralVoiceRef.current }),
         });
         if (!res.ok) throw new Error(`tts ${res.status}`);
+        if (myGen !== genRef.current) { speakingRef.current = false; return; }
         const url = URL.createObjectURL(await res.blob());
+        if (myGen !== genRef.current) { URL.revokeObjectURL(url); speakingRef.current = false; return; }
         const audio = new Audio(url);
-        audio.onended = () => { speakingRef.current = false; lastSpokeEndRef.current = Date.now(); URL.revokeObjectURL(url); };
-        audio.onerror = () => { speakingRef.current = false; lastSpokeEndRef.current = Date.now(); };
+        currentAudioRef.current = audio;
+        audio.onended = () => {
+          if (currentAudioRef.current === audio) currentAudioRef.current = null;
+          speakingRef.current = false; lastSpokeEndRef.current = Date.now(); URL.revokeObjectURL(url);
+        };
+        audio.onerror = () => {
+          if (currentAudioRef.current === audio) currentAudioRef.current = null;
+          speakingRef.current = false; lastSpokeEndRef.current = Date.now();
+          if (myGen === genRef.current) speakBrowser(text);
+        };
         await audio.play();
         return;
       } catch {
         speakingRef.current = false;
-        speakBrowser(text); // nöral başarısızsa tarayıcı sesine düş
+        if (myGen === genRef.current) speakBrowser(text);
         return;
       }
     }
@@ -185,32 +211,40 @@ export default function Ear() {
   }, [addLog, activate, speak]);
 
   const handleFinal = useCallback((heard: string) => {
-    // Feedback engeli: bot konuşurken / az önce konuştuysa / kendi cevabını duyduysa yok say.
-    if (speakingRef.current || Date.now() - lastSpokeEndRef.current < 800) return;
     const nh = norm(heard);
     if (!nh) return;
+    // Echo filtresi: botun kendi sesini duyup işleme.
     if (lastReplyNormRef.current && (nh.includes(lastReplyNormRef.current.slice(0, 20)) || lastReplyNormRef.current.includes(nh.slice(0, 20)))) return;
 
-    addLog("heard", heard);
-
-    // Konuşma açıkken durdurma kelimesi → kısa "sustum" de, sonra sesli mod kapansın (chat normal devam eder).
-    if (activeRef.current && matchTrigger(heard, stopWordsRef.current) !== null) {
+    // Durdurma kelimesi bot KONUŞURKEN bile işlenir (barge-in) → cümleyi ANINDA keser.
+    if ((activeRef.current || speakingRef.current || !!currentAudioRef.current) && matchTrigger(heard, stopWordsRef.current) !== null) {
+      const wasSpeaking = speakingRef.current || !!currentAudioRef.current;
+      stopSpeaking(); // sözü yarıda kes
       deactivate();
-      const bye = STOP_ACKS[Math.floor(Math.random() * STOP_ACKS.length)];
-      lastReplyNormRef.current = norm(bye);
-      addLog("reply", bye);
-      speak(bye);
-      setStatus("🔇 Sesli mod kapandı — chat normal çalışmaya devam ediyor. Tekrar tetikleyici de.");
+      addLog("heard", heard);
+      setStatus("🔇 Durduruldu — sesli mod kapandı, chat normal çalışmaya devam ediyor. Tekrar tetikleyici de.");
+      if (wasSpeaking) {
+        addLog("info", "Sözü yarıda kesildi");
+      } else {
+        const bye = STOP_ACKS[Math.floor(Math.random() * STOP_ACKS.length)];
+        lastReplyNormRef.current = norm(bye);
+        addLog("reply", bye);
+        speak(bye);
+      }
       return;
     }
 
+    // Feedback engeli: bot konuşurken (durdurma dışındaki) her şey yok sayılır.
+    if (speakingRef.current || Date.now() - lastSpokeEndRef.current < 800) return;
+
+    addLog("heard", heard);
     const cmd = matchTrigger(heard, triggersRef.current);
     if (cmd !== null) {
       ask(cmd); // tetikleyici dedi → konuşmayı aç + sor
     } else if (activeRef.current) {
       ask(heard); // konuşma açık → tetikleyicisiz her söz bota gider (sen 'sus' diyene kadar)
     }
-  }, [addLog, ask, deactivate, speak]);
+  }, [addLog, ask, deactivate, speak, stopSpeaking]);
 
   const start = useCallback(() => {
     const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -239,9 +273,10 @@ export default function Ear() {
     listeningRef.current = false;
     setListening(false);
     deactivate();
+    stopSpeaking();
     setStatus("Durduruldu");
     try { recRef.current?.stop(); } catch { /* noop */ }
-  }, [deactivate]);
+  }, [deactivate, stopSpeaking]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.getVoices();
@@ -255,7 +290,7 @@ export default function Ear() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (st) setStopWords(st);
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (nv) setNeuralVoice(nv);
+      if (nv && ["google", "Emel", "Ahmet"].includes(nv)) setNeuralVoice(nv); // eski değerleri yok say
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (nn) setNeural(nn === "1");
     } catch { /* noop */ }
@@ -313,7 +348,7 @@ export default function Ear() {
         <div>
           <label className="flex items-center gap-2 text-sm text-neutral-300">
             <input type="checkbox" checked={neural} onChange={(e) => setNeural(e.target.checked)} />
-            Nöral ses (Emel) — sunucudan gelir, <b>Chrome dahil her tarayıcıda</b> çalışır (önerilir)
+            Bulut ses (Google Türkçe) — <b>Chrome dahil her tarayıcıda</b> çalışır, ücretsiz (önerilir)
           </label>
           {neural ? (
             <select
@@ -321,8 +356,9 @@ export default function Ear() {
               onChange={(e) => setNeuralVoice(e.target.value)}
               className="w-full mt-2 rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-emerald-500"
             >
-              <option value="tr-TR-EmelNeural">Emel (kadın, nöral)</option>
-              <option value="tr-TR-AhmetNeural">Ahmet (erkek, nöral)</option>
+              <option value="google">Google Türkçe (bedava, key yok)</option>
+              <option value="Emel">Emel (Azure nöral — AZURE_SPEECH_KEY gerekli)</option>
+              <option value="Ahmet">Ahmet (Azure nöral — AZURE_SPEECH_KEY gerekli)</option>
             </select>
           ) : (
             <select
@@ -337,7 +373,7 @@ export default function Ear() {
             </select>
           )}
           <p className="text-xs text-neutral-500 mt-1">
-            Nöral ses açıkken tarayıcının kendi sesleri değil, sunucudan <b>Emel</b> çalınır (bedava, key yok). Kapatırsan tarayıcının yerel sesleri kullanılır.
+            <b>Google Türkçe</b> bedava ve key gerektirmez (biraz robotik). <b>Emel/Ahmet</b> gerçek nöral seslerdir ama Vercel'de <code>AZURE_SPEECH_KEY</code> + <code>AZURE_SPEECH_REGION</code> env&apos;i gerektirir (Azure ücretsiz kademe ~500k karakter/ay). Key yoksa Emel seçilse bile otomatik Google&apos;a düşer.
           </p>
         </div>
 

@@ -42,6 +42,11 @@ export const config = {
   tavily: {
     apiKey: req("TAVILY_API_KEY"),
   },
+  // Azure Speech (opsiyonel) — key varsa nöral Emel; yoksa Google Türkçe TTS'e düşer.
+  azure: {
+    key: req("AZURE_SPEECH_KEY"),
+    region: req("AZURE_SPEECH_REGION", "westeurope"),
+  },
   admin: {
     password: req("ADMIN_PASSWORD", "degistir-beni"),
   },
