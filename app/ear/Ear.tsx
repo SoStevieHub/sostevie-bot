@@ -7,19 +7,29 @@ type Turn = { who: "sen" | "bot"; text: string };
 
 const WINDOW_MS = 75_000; // konuşma açık kalma süresi; sonra bot susar
 
+// STT "BotStevie"yi genelde "bot tv"/"boz tv" duyuyor; net yakalanan "asistan"ı da ekledik.
+const DEFAULT_TRIGGERS = "asistan, hey bot, bot tv, boz tv, botstevie, bot stevie";
+
 function norm(s: string): string {
   return s.toLocaleLowerCase("tr").replace(/ç/g, "c").replace(/ş/g, "s").replace(/ı/g, "i")
     .replace(/ö/g, "o").replace(/ü/g, "u").replace(/ğ/g, "g").replace(/[^a-z0-9 ]/g, "").trim();
 }
+const flat = (s: string) => norm(s).replace(/ /g, "");
 
-// "BotStevie" wake-word'ünü toleranslı yakala; arkasındaki komutu döndür (yoksa "").
-function extractCommand(raw: string): string | null {
-  const n = norm(raw);
-  const m = n.match(/bot\s*st[ei]vi[e]?/);
-  if (!m || m.index === undefined) return null;
-  // Ham metinde de aynı yerden sonrasını al (yaklaşık).
-  const after = raw.slice(Math.min(m.index + m[0].length, raw.length)).replace(/^[\s,.:;!?-]+/, "").trim();
-  return after;
+// Ayarlanabilir tetikleyicilerden herhangi biri geçiyor mu? Geçiyorsa arkasındaki komutu döndür.
+function matchTrigger(raw: string, triggers: string[]): string | null {
+  const nhFlat = flat(raw);
+  for (const t of triggers) {
+    const tf = flat(t);
+    if (tf.length < 3) continue;
+    if (nhFlat.includes(tf)) {
+      // Tetikleyici kelimeleri ham metinden temizle (arada boşluk toleranslı).
+      const pattern = t.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "")).join("\\s*");
+      const rest = raw.replace(new RegExp(pattern, "i"), " ").replace(/\s+/g, " ").replace(/^[\s,.:;!?-]+/, "").trim();
+      return rest;
+    }
+  }
+  return null;
 }
 
 export default function Ear() {
@@ -28,6 +38,8 @@ export default function Ear() {
   const [active, setActive] = useState(false); // konuşma açık mı
   const [status, setStatus] = useState("Hazır");
   const [log, setLog] = useState<LogItem[]>([]);
+  const [triggers, setTriggers] = useState(DEFAULT_TRIGGERS);
+  const triggersRef = useRef<string[]>([]);
 
   const recRef = useRef<any>(null);
   const listeningRef = useRef(false);
@@ -41,6 +53,10 @@ export default function Ear() {
   const timerRef = useRef<any>(null);
 
   useEffect(() => { ttsRef.current = tts; }, [tts]);
+  useEffect(() => {
+    triggersRef.current = triggers.split(",").map((s) => s.trim()).filter(Boolean);
+    try { localStorage.setItem("ear_triggers", triggers); } catch { /* noop */ }
+  }, [triggers]);
 
   const addLog = useCallback((kind: LogItem["kind"], text: string) => {
     setLog((l) => [{ t: Date.now() + Math.random(), kind, text }, ...l].slice(0, 50));
@@ -107,7 +123,7 @@ export default function Ear() {
     if (lastReplyNormRef.current && (nh.includes(lastReplyNormRef.current.slice(0, 20)) || lastReplyNormRef.current.includes(nh.slice(0, 20)))) return;
 
     addLog("heard", heard);
-    const cmd = extractCommand(heard);
+    const cmd = matchTrigger(heard, triggersRef.current);
     if (cmd !== null) {
       ask(cmd); // "BotStevie ..." dedi → konuşmayı aç + sor
     } else if (activeRef.current) {
@@ -148,6 +164,8 @@ export default function Ear() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.getVoices();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    try { const s = localStorage.getItem("ear_triggers"); if (s) setTriggers(s); } catch { /* noop */ }
     return () => { listeningRef.current = false; try { recRef.current?.stop(); } catch { /* noop */ } };
   }, []);
 
@@ -173,6 +191,19 @@ export default function Ear() {
           <span className={`text-sm px-3 py-1 rounded-full ${active ? "bg-emerald-900 text-emerald-300" : "bg-neutral-800 text-neutral-400"}`}>
             {active ? "🟢 Konuşma açık" : "⚪ Bekliyor"}
           </span>
+        </div>
+
+        <div>
+          <label className="text-sm text-neutral-300">Tetikleyici kelimeler (virgülle ayır) — bunlardan biri geçince konuşma açılır</label>
+          <input
+            value={triggers}
+            onChange={(e) => setTriggers(e.target.value)}
+            className="w-full mt-1 rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            placeholder="asistan, hey bot, bot tv…"
+          />
+          <p className="text-xs text-neutral-500 mt-1">
+            İpucu: Aşağıdaki <b>&quot;duydu&quot;</b> satırlarına bak — sen bir kelime söyleyince STT onu nasıl yazıyorsa, o yazımı buraya ekle. (STT &quot;BotStevie&quot;yi genelde &quot;bot tv&quot; duyuyor; en garanti tetikleyici <b>&quot;asistan&quot;</b>.)
+          </p>
         </div>
 
         <div className="rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-2 text-sm text-neutral-300">{status}</div>
