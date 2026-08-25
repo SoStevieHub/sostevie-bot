@@ -45,6 +45,9 @@ export default function Ear() {
   const triggersRef = useRef<string[]>([]);
   const [stopWords, setStopWords] = useState(DEFAULT_STOP);
   const stopWordsRef = useRef<string[]>([]);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceName, setVoiceName] = useState("");
+  const voiceNameRef = useRef("");
 
   const recRef = useRef<any>(null);
   const listeningRef = useRef(false);
@@ -65,6 +68,30 @@ export default function Ear() {
     stopWordsRef.current = stopWords.split(",").map((s) => s.trim()).filter(Boolean);
     try { localStorage.setItem("ear_stop", stopWords); } catch { /* noop */ }
   }, [stopWords]);
+  useEffect(() => {
+    voiceNameRef.current = voiceName;
+    if (voiceName) { try { localStorage.setItem("ear_voice", voiceName); } catch { /* noop */ } }
+  }, [voiceName]);
+
+  // Ses listesini yükle (async gelir) ve seçili yoksa Emel'i / Türkçe'yi otomatik seç.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const load = () => {
+      const vs = window.speechSynthesis.getVoices();
+      if (vs.length) setVoices(vs);
+      const saved = (() => { try { return localStorage.getItem("ear_voice"); } catch { return null; } })();
+      const pick =
+        (saved && vs.find((v) => v.name === saved)?.name) ||
+        vs.find((v) => /emel/i.test(v.name))?.name ||
+        vs.find((v) => v.lang?.toLowerCase().startsWith("tr"))?.name ||
+        "";
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (pick) setVoiceName((cur) => cur || pick);
+    };
+    load();
+    window.speechSynthesis.onvoiceschanged = load;
+    return () => { window.speechSynthesis.onvoiceschanged = null; };
+  }, []);
 
   const addLog = useCallback((kind: LogItem["kind"], text: string) => {
     setLog((l) => [{ t: Date.now() + Math.random(), kind, text }, ...l].slice(0, 50));
@@ -85,8 +112,12 @@ export default function Ear() {
     if (!ttsRef.current || typeof window === "undefined" || !window.speechSynthesis) return;
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "tr-TR";
-    const tr = window.speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith("tr"));
-    if (tr) u.voice = tr;
+    const list = window.speechSynthesis.getVoices();
+    const v =
+      list.find((x) => x.name === voiceNameRef.current) ||
+      list.find((x) => /emel/i.test(x.name)) ||
+      list.find((x) => x.lang?.toLowerCase().startsWith("tr"));
+    if (v) u.voice = v;
     u.onstart = () => { speakingRef.current = true; };
     u.onend = () => { speakingRef.current = false; lastSpokeEndRef.current = Date.now(); };
     window.speechSynthesis.speak(u);
@@ -238,6 +269,23 @@ export default function Ear() {
             className="w-full mt-1 rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-red-500"
             placeholder="sus, cevap verme, yeter…"
           />
+        </div>
+
+        <div>
+          <label className="text-sm text-neutral-300">Sesli cevap sesi (TTS) — Emel için Microsoft Edge'de aç</label>
+          <select
+            value={voiceName}
+            onChange={(e) => setVoiceName(e.target.value)}
+            className="w-full mt-1 rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+          >
+            {voices.length === 0 && <option value="">(sesler yükleniyor…)</option>}
+            {voices.map((v) => (
+              <option key={v.name} value={v.name}>{v.name} — {v.lang}</option>
+            ))}
+          </select>
+          <p className="text-xs text-neutral-500 mt-1">
+            &quot;Microsoft Emel Online (Natural)&quot; sesi <b>yalnızca Microsoft Edge</b>&apos;de görünür (Edge de STT&apos;yi destekler). Chrome&apos;da Emel yoksa listede olmaz.
+          </p>
         </div>
 
         <div className="rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-2 text-sm text-neutral-300">{status}</div>
