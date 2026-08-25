@@ -160,6 +160,7 @@ export default function Dashboard({ categories }: { categories: { id: string; la
             <button onClick={() => action("news")} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 px-4 py-2 text-sm">Şimdi haber paylaş</button>
             <button onClick={() => action("awards")} className="rounded-lg bg-neutral-800 hover:bg-neutral-700 px-4 py-2 text-sm">Ödülleri paylaş</button>
             <a href="/api/admin/llm-test" target="_blank" rel="noreferrer" className="rounded-lg bg-neutral-800 hover:bg-neutral-700 px-4 py-2 text-sm">LLM test</a>
+            <a href="/ear" target="_blank" rel="noreferrer" className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-medium">🎧 Kulak (sesli komut)</a>
           </div>
           <p className="mt-2 text-xs text-neutral-500">
             Önce <b>yayıncı</b> hesabını (incognito'da SoStevie) bağla — sohbet okuma açılır. Sonra <b>bot</b> hesabını (incognito'da BotStevie) bağla — mesajları o atar.

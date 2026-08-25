@@ -122,6 +122,62 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   }
 }
 
+// Yayıncının SESLİ komutunu işler: chat'e cevap yazar, metni döner (TTS için).
+// history: son konuşma turları (bağlam için).
+export async function answerOwnerVoice(
+  text: string,
+  history: { who: string; text: string }[] = [],
+): Promise<{ ok: boolean; reply?: string; reason?: string }> {
+  const clean = text.trim();
+  if (!clean) return { ok: false, reason: "boş" };
+
+  const convo = history.slice(-6).map((h) => `${h.who === "bot" ? "Sen (bot)" : "Yayıncı"}: ${h.text}`).join("\n");
+  const userMessage = convo
+    ? `Önceki konuşma:\n${convo}\n\nYayıncı şimdi sesli olarak dedi ki: "${clean}"\nBu konuşmanın DEVAMI olarak, bağlamı koruyarak cevap ver.`
+    : clean;
+
+  const settings = await getSettings();
+  if (!settings.botEnabled) return { ok: false, reason: "bot kapalı" };
+
+  const broadcasterId = await getChannelBroadcasterId();
+  if (!broadcasterId) return { ok: false, reason: "kanal/token yok" };
+
+  const reader = await getToken("reader");
+  const ownerName = reader?.botUsername || config.kick.channelSlug;
+  const isQuestion = /\?|\b(ne|neden|nasil|nasıl|kim|kac|kaç|nerede|ne zaman|mi|mı|mu|mü)\b/i.test(clean);
+  const mood = await getMood();
+
+  try {
+    const raw = await generateReply({
+      userMessage,
+      username: ownerName,
+      isInsult: false,
+      isQuestion,
+      persona: settings.persona,
+      toxicMode: settings.toxicModeEnabled,
+      ownerName,
+      ownerProfile: settings.ownerProfile,
+      defendOwner: settings.defendOwner,
+      isFromOwner: true, // yayıncının kendisi sesli sesleniyor
+      chatterCount: 0,
+      chatterNotes: "",
+      chatterRecent: [],
+      moodScore: mood.score,
+    });
+    if (!raw) return { ok: false, reason: "cevap üretilemedi" };
+    const finalText = finalizeMessage(raw, { isInsult: false });
+    const sent = await sendChatMessage(broadcasterId, finalText);
+    if (sent.ok) {
+      await setLastReply(Date.now());
+      await addLog({ direction: "out", kind: "reply", username: "(sesli komut)", content: finalText });
+    }
+    return { ok: sent.ok, reply: finalText, reason: sent.ok ? undefined : `gönderim ${sent.status}` };
+  } catch (e) {
+    console.error("[bot] sesli komut hatası:", e);
+    return { ok: false, reason: "ai hatası" };
+  }
+}
+
 // Haftalık topluluk ödülleri turu — hafızadan komik ödüller üretip paylaşır.
 export async function runAwardsTick(): Promise<{ posted: boolean; reason?: string; count?: number }> {
   const settings = await getSettings();
