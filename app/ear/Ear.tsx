@@ -49,6 +49,11 @@ export default function Ear() {
   const [voiceName, setVoiceName] = useState("");
   const voiceNameRef = useRef("");
   const [saved, setSaved] = useState(false);
+  const [neural, setNeural] = useState(true); // Edge nöral ses (Emel), her tarayıcıda
+  const neuralRef = useRef(true);
+  const [neuralVoice, setNeuralVoice] = useState("tr-TR-EmelNeural");
+  const neuralVoiceRef = useRef("tr-TR-EmelNeural");
+  const hydratedRef = useRef(false); // localStorage yüklenene kadar yazma (varsayılan ezmesin)
 
   const recRef = useRef<any>(null);
   const listeningRef = useRef(false);
@@ -61,18 +66,18 @@ export default function Ear() {
   const historyRef = useRef<Turn[]>([]);
 
   useEffect(() => { ttsRef.current = tts; }, [tts]);
+  const save = (k: string, v: string) => { if (hydratedRef.current) { try { localStorage.setItem(k, v); } catch { /* noop */ } } };
   useEffect(() => {
     triggersRef.current = triggers.split(",").map((s) => s.trim()).filter(Boolean);
-    try { localStorage.setItem("ear_triggers", triggers); } catch { /* noop */ }
+    save("ear_triggers", triggers);
   }, [triggers]);
   useEffect(() => {
     stopWordsRef.current = stopWords.split(",").map((s) => s.trim()).filter(Boolean);
-    try { localStorage.setItem("ear_stop", stopWords); } catch { /* noop */ }
+    save("ear_stop", stopWords);
   }, [stopWords]);
-  useEffect(() => {
-    voiceNameRef.current = voiceName;
-    if (voiceName) { try { localStorage.setItem("ear_voice", voiceName); } catch { /* noop */ } }
-  }, [voiceName]);
+  useEffect(() => { voiceNameRef.current = voiceName; if (voiceName) save("ear_voice", voiceName); }, [voiceName]);
+  useEffect(() => { neuralRef.current = neural; save("ear_neural", neural ? "1" : "0"); }, [neural]);
+  useEffect(() => { neuralVoiceRef.current = neuralVoice; save("ear_nvoice", neuralVoice); }, [neuralVoice]);
 
   // Ses listesini yükle (async gelir) ve seçili yoksa Emel'i / Türkçe'yi otomatik seç.
   useEffect(() => {
@@ -109,8 +114,8 @@ export default function Ear() {
     setActive(true);
   }, []);
 
-  const speak = useCallback((text: string) => {
-    if (!ttsRef.current || typeof window === "undefined" || !window.speechSynthesis) return;
+  const speakBrowser = useCallback((text: string) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "tr-TR";
     const list = window.speechSynthesis.getVoices();
@@ -123,6 +128,32 @@ export default function Ear() {
     u.onend = () => { speakingRef.current = false; lastSpokeEndRef.current = Date.now(); };
     window.speechSynthesis.speak(u);
   }, []);
+
+  const speak = useCallback(async (text: string) => {
+    if (!ttsRef.current) return;
+    if (neuralRef.current) {
+      try {
+        speakingRef.current = true; // ses gelene kadar da dinlemeyi kes (feedback engeli)
+        const res = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, voice: neuralVoiceRef.current }),
+        });
+        if (!res.ok) throw new Error(`tts ${res.status}`);
+        const url = URL.createObjectURL(await res.blob());
+        const audio = new Audio(url);
+        audio.onended = () => { speakingRef.current = false; lastSpokeEndRef.current = Date.now(); URL.revokeObjectURL(url); };
+        audio.onerror = () => { speakingRef.current = false; lastSpokeEndRef.current = Date.now(); };
+        await audio.play();
+        return;
+      } catch {
+        speakingRef.current = false;
+        speakBrowser(text); // nöral başarısızsa tarayıcı sesine düş
+        return;
+      }
+    }
+    speakBrowser(text);
+  }, [speakBrowser]);
 
   const ask = useCallback(async (query: string) => {
     if (busyRef.current) return;
@@ -217,11 +248,18 @@ export default function Ear() {
     try {
       const s = localStorage.getItem("ear_triggers");
       const st = localStorage.getItem("ear_stop");
+      const nv = localStorage.getItem("ear_nvoice");
+      const nn = localStorage.getItem("ear_neural");
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (s) setTriggers(s);
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (st) setStopWords(st);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (nv) setNeuralVoice(nv);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (nn) setNeural(nn === "1");
     } catch { /* noop */ }
+    hydratedRef.current = true; // artık değişiklikler kaydedilebilir
     return () => { listeningRef.current = false; try { recRef.current?.stop(); } catch { /* noop */ } };
   }, []);
 
@@ -273,19 +311,33 @@ export default function Ear() {
         </div>
 
         <div>
-          <label className="text-sm text-neutral-300">Sesli cevap sesi (TTS) — Emel için Microsoft Edge'de aç</label>
-          <select
-            value={voiceName}
-            onChange={(e) => setVoiceName(e.target.value)}
-            className="w-full mt-1 rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-          >
-            {voices.length === 0 && <option value="">(sesler yükleniyor…)</option>}
-            {voices.map((v) => (
-              <option key={v.name} value={v.name}>{v.name} — {v.lang}</option>
-            ))}
-          </select>
+          <label className="flex items-center gap-2 text-sm text-neutral-300">
+            <input type="checkbox" checked={neural} onChange={(e) => setNeural(e.target.checked)} />
+            Nöral ses (Emel) — sunucudan gelir, <b>Chrome dahil her tarayıcıda</b> çalışır (önerilir)
+          </label>
+          {neural ? (
+            <select
+              value={neuralVoice}
+              onChange={(e) => setNeuralVoice(e.target.value)}
+              className="w-full mt-2 rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            >
+              <option value="tr-TR-EmelNeural">Emel (kadın, nöral)</option>
+              <option value="tr-TR-AhmetNeural">Ahmet (erkek, nöral)</option>
+            </select>
+          ) : (
+            <select
+              value={voiceName}
+              onChange={(e) => setVoiceName(e.target.value)}
+              className="w-full mt-2 rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            >
+              {voices.length === 0 && <option value="">(tarayıcı sesleri yükleniyor…)</option>}
+              {voices.map((v) => (
+                <option key={v.name} value={v.name}>{v.name} — {v.lang}</option>
+              ))}
+            </select>
+          )}
           <p className="text-xs text-neutral-500 mt-1">
-            &quot;Microsoft Emel Online (Natural)&quot; sesi <b>yalnızca Microsoft Edge</b>&apos;de görünür (Edge de STT&apos;yi destekler). Chrome&apos;da Emel yoksa listede olmaz.
+            Nöral ses açıkken tarayıcının kendi sesleri değil, sunucudan <b>Emel</b> çalınır (bedava, key yok). Kapatırsan tarayıcının yerel sesleri kullanılır.
           </p>
         </div>
 
@@ -296,6 +348,8 @@ export default function Ear() {
                 localStorage.setItem("ear_triggers", triggers);
                 localStorage.setItem("ear_stop", stopWords);
                 if (voiceName) localStorage.setItem("ear_voice", voiceName);
+                localStorage.setItem("ear_neural", neural ? "1" : "0");
+                localStorage.setItem("ear_nvoice", neuralVoice);
               } catch { /* noop */ }
               setSaved(true);
               setTimeout(() => setSaved(false), 2500);
