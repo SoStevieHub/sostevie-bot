@@ -7,6 +7,8 @@ type Turn = { who: "sen" | "bot"; text: string };
 
 // Konuşmayı kapatan kelimeler (sen söyleyene kadar açık kalır).
 const DEFAULT_STOP = "sus, cevap verme, yeter, kapan, dur artık, kes, tamam bu kadar";
+// Susarken söyleyeceği kısa sözler (LLM'siz, anında).
+const STOP_ACKS = ["Tamam, sustum.", "Anlaşıldı, kenara çekildim.", "Peki, sesimi kesiyorum.", "Sustum; chat'te yine buradayım.", "Tamamdır, susuyorum."];
 
 // STT "BotStevie"yi genelde "bot tv"/"boz tv" duyuyor; net yakalanan "asistan"ı da ekledik.
 const DEFAULT_TRIGGERS = "asistan, hey bot, bot tv, boz tv, botstevie, bot stevie";
@@ -128,11 +130,14 @@ export default function Ear() {
 
     addLog("heard", heard);
 
-    // Konuşma açıkken durdurma kelimesi → sesli mod kapansın (chat normal devam eder).
+    // Konuşma açıkken durdurma kelimesi → kısa "sustum" de, sonra sesli mod kapansın (chat normal devam eder).
     if (activeRef.current && matchTrigger(heard, stopWordsRef.current) !== null) {
       deactivate();
+      const bye = STOP_ACKS[Math.floor(Math.random() * STOP_ACKS.length)];
+      lastReplyNormRef.current = norm(bye);
+      addLog("reply", bye);
+      speak(bye);
       setStatus("🔇 Sesli mod kapandı — chat normal çalışmaya devam ediyor. Tekrar tetikleyici de.");
-      addLog("info", "Sesli konuşma kapatıldı (chat devam ediyor)");
       return;
     }
 
@@ -142,7 +147,7 @@ export default function Ear() {
     } else if (activeRef.current) {
       ask(heard); // konuşma açık → tetikleyicisiz her söz bota gider (sen 'sus' diyene kadar)
     }
-  }, [addLog, ask, deactivate]);
+  }, [addLog, ask, deactivate, speak]);
 
   const start = useCallback(() => {
     const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
