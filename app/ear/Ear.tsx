@@ -48,6 +48,7 @@ export default function Ear() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceName, setVoiceName] = useState("");
   const voiceNameRef = useRef("");
+  const [saved, setSaved] = useState(false);
 
   const recRef = useRef<any>(null);
   const listeningRef = useRef(false);
@@ -286,6 +287,25 @@ export default function Ear() {
           <p className="text-xs text-neutral-500 mt-1">
             &quot;Microsoft Emel Online (Natural)&quot; sesi <b>yalnızca Microsoft Edge</b>&apos;de görünür (Edge de STT&apos;yi destekler). Chrome&apos;da Emel yoksa listede olmaz.
           </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              try {
+                localStorage.setItem("ear_triggers", triggers);
+                localStorage.setItem("ear_stop", stopWords);
+                if (voiceName) localStorage.setItem("ear_voice", voiceName);
+              } catch { /* noop */ }
+              setSaved(true);
+              setTimeout(() => setSaved(false), 2500);
+            }}
+            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-5 py-2 text-sm font-medium"
+          >
+            Kaydet
+          </button>
+          <span className="text-xs text-neutral-500">Ayarlar yazdıkça bu tarayıcıda zaten otomatik kaydedilir.</span>
+          {saved && <span className="text-sm text-emerald-400">✓ Kaydedildi</span>}
         </div>
 
         <div className="rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-2 text-sm text-neutral-300">{status}</div>
