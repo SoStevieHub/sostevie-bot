@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type LogItem = { t: number; kind: "heard" | "asked" | "reply" | "info"; text: string };
 type Turn = { who: "sen" | "bot"; text: string };
 
-const WINDOW_MS = 75_000; // konuşma açık kalma süresi; sonra bot susar
+// Konuşmayı kapatan kelimeler (sen söyleyene kadar açık kalır).
+const DEFAULT_STOP = "sus, cevap verme, yeter, kapan, dur artık, kes, tamam bu kadar";
 
 // STT "BotStevie"yi genelde "bot tv"/"boz tv" duyuyor; net yakalanan "asistan"ı da ekledik.
 const DEFAULT_TRIGGERS = "asistan, hey bot, bot tv, boz tv, botstevie, bot stevie";
@@ -40,6 +41,8 @@ export default function Ear() {
   const [log, setLog] = useState<LogItem[]>([]);
   const [triggers, setTriggers] = useState(DEFAULT_TRIGGERS);
   const triggersRef = useRef<string[]>([]);
+  const [stopWords, setStopWords] = useState(DEFAULT_STOP);
+  const stopWordsRef = useRef<string[]>([]);
 
   const recRef = useRef<any>(null);
   const listeningRef = useRef(false);
@@ -50,13 +53,16 @@ export default function Ear() {
   const lastSpokeEndRef = useRef(0);
   const lastReplyNormRef = useRef("");
   const historyRef = useRef<Turn[]>([]);
-  const timerRef = useRef<any>(null);
 
   useEffect(() => { ttsRef.current = tts; }, [tts]);
   useEffect(() => {
     triggersRef.current = triggers.split(",").map((s) => s.trim()).filter(Boolean);
     try { localStorage.setItem("ear_triggers", triggers); } catch { /* noop */ }
   }, [triggers]);
+  useEffect(() => {
+    stopWordsRef.current = stopWords.split(",").map((s) => s.trim()).filter(Boolean);
+    try { localStorage.setItem("ear_stop", stopWords); } catch { /* noop */ }
+  }, [stopWords]);
 
   const addLog = useCallback((kind: LogItem["kind"], text: string) => {
     setLog((l) => [{ t: Date.now() + Math.random(), kind, text }, ...l].slice(0, 50));
@@ -65,15 +71,13 @@ export default function Ear() {
   const deactivate = useCallback(() => {
     activeRef.current = false;
     setActive(false);
-    setStatus("Konuşma kapandı 😴 — tekrar 'BotStevie' de");
+    setStatus("Konuşma kapandı 😴 — tekrar tetikleyici kelimeyi söyle");
   }, []);
 
-  const refreshWindow = useCallback(() => {
+  const activate = useCallback(() => {
     activeRef.current = true;
     setActive(true);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(deactivate, WINDOW_MS);
-  }, [deactivate]);
+  }, []);
 
   const speak = useCallback((text: string) => {
     if (!ttsRef.current || typeof window === "undefined" || !window.speechSynthesis) return;
@@ -89,7 +93,7 @@ export default function Ear() {
   const ask = useCallback(async (query: string) => {
     if (busyRef.current) return;
     busyRef.current = true;
-    refreshWindow();
+    activate();
     addLog("asked", query || "(selam)");
     historyRef.current = [...historyRef.current, { who: "sen" as const, text: query || "sana seslendim" }].slice(-8);
     try {
@@ -104,7 +108,7 @@ export default function Ear() {
         historyRef.current = [...historyRef.current, { who: "bot" as const, text: j.reply }].slice(-8);
         lastReplyNormRef.current = norm(j.reply);
         speak(j.reply);
-        refreshWindow();
+        activate();
       } else {
         addLog("info", `Cevap yok: ${j.reason ?? j.error ?? "?"}`);
       }
@@ -113,7 +117,7 @@ export default function Ear() {
     } finally {
       busyRef.current = false;
     }
-  }, [addLog, refreshWindow, speak]);
+  }, [addLog, activate, speak]);
 
   const handleFinal = useCallback((heard: string) => {
     // Feedback engeli: bot konuşurken / az önce konuştuysa / kendi cevabını duyduysa yok say.
@@ -123,13 +127,22 @@ export default function Ear() {
     if (lastReplyNormRef.current && (nh.includes(lastReplyNormRef.current.slice(0, 20)) || lastReplyNormRef.current.includes(nh.slice(0, 20)))) return;
 
     addLog("heard", heard);
+
+    // Konuşma açıkken durdurma kelimesi → sesli mod kapansın (chat normal devam eder).
+    if (activeRef.current && matchTrigger(heard, stopWordsRef.current) !== null) {
+      deactivate();
+      setStatus("🔇 Sesli mod kapandı — chat normal çalışmaya devam ediyor. Tekrar tetikleyici de.");
+      addLog("info", "Sesli konuşma kapatıldı (chat devam ediyor)");
+      return;
+    }
+
     const cmd = matchTrigger(heard, triggersRef.current);
     if (cmd !== null) {
-      ask(cmd); // "BotStevie ..." dedi → konuşmayı aç + sor
+      ask(cmd); // tetikleyici dedi → konuşmayı aç + sor
     } else if (activeRef.current) {
-      ask(heard); // konuşma açık → wake-word'süz her söz bota gider
+      ask(heard); // konuşma açık → tetikleyicisiz her söz bota gider (sen 'sus' diyene kadar)
     }
-  }, [addLog, ask]);
+  }, [addLog, ask, deactivate]);
 
   const start = useCallback(() => {
     const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -164,8 +177,14 @@ export default function Ear() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.getVoices();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    try { const s = localStorage.getItem("ear_triggers"); if (s) setTriggers(s); } catch { /* noop */ }
+    try {
+      const s = localStorage.getItem("ear_triggers");
+      const st = localStorage.getItem("ear_stop");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (s) setTriggers(s);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (st) setStopWords(st);
+    } catch { /* noop */ }
     return () => { listeningRef.current = false; try { recRef.current?.stop(); } catch { /* noop */ } };
   }, []);
 
@@ -175,7 +194,7 @@ export default function Ear() {
         <div>
           <h1 className="text-2xl font-semibold">sostevie bot · Kulak 🎧</h1>
           <p className="text-sm text-neutral-400">
-            Yayında açık bırak. <b>&quot;BotStevie ...&quot;</b> de → konuşma açılır; sonra <b>adını tekrar demeden</b> her sorunu sesli cevaplar. Susunca (~75 sn) bot da susar.
+            Yayında açık bırak. <b>Tetikleyici kelimeyi</b> (örn. &quot;asistan&quot;) de → konuşma açılır; sonra <b>tekrar demeden</b> her sorunu sesli cevaplar. <b>Sen &quot;sus&quot; diyene kadar</b> açık kalır; durdurunca sesli mod kapanır, chat normal çalışmaya devam eder.
           </p>
         </div>
 
@@ -204,6 +223,16 @@ export default function Ear() {
           <p className="text-xs text-neutral-500 mt-1">
             İpucu: Aşağıdaki <b>&quot;duydu&quot;</b> satırlarına bak — sen bir kelime söyleyince STT onu nasıl yazıyorsa, o yazımı buraya ekle. (STT &quot;BotStevie&quot;yi genelde &quot;bot tv&quot; duyuyor; en garanti tetikleyici <b>&quot;asistan&quot;</b>.)
           </p>
+        </div>
+
+        <div>
+          <label className="text-sm text-neutral-300">Durdurma kelimeleri (virgülle ayır) — sesli söyleyince bot susar, chat devam eder</label>
+          <input
+            value={stopWords}
+            onChange={(e) => setStopWords(e.target.value)}
+            className="w-full mt-1 rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-red-500"
+            placeholder="sus, cevap verme, yeter…"
+          />
         </div>
 
         <div className="rounded-lg bg-neutral-900 border border-neutral-800 px-4 py-2 text-sm text-neutral-300">{status}</div>
