@@ -29,9 +29,12 @@ export const config = {
     model: req("OPENROUTER_MODEL", "deepseek/deepseek-chat-v3-0324:free"),
   },
   // Gemini (OpenAI uyumlu uç) — kotası kısıtlı, zincirde son yedek olarak.
+  // ttsModel/ttsVoice: /ear sesli mod için Gemini TTS (aynı GEMINI_API_KEY ile).
   gemini: {
     apiKey: req("GEMINI_API_KEY"),
     model: req("GEMINI_MODEL", "gemini-2.0-flash"),
+    ttsModel: req("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts"),
+    ttsVoice: req("GEMINI_TTS_VOICE", "Kore"),
   },
   // Opsiyonel: kendi sunucundaki Ollama (OpenAI uyumlu uç). Vercel'in erişebilmesi için public URL olmalı.
   ollama: {

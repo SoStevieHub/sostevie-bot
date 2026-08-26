@@ -38,6 +38,8 @@ function matchTrigger(raw: string, triggers: string[]): string | null {
 export default function Ear() {
   const [listening, setListening] = useState(false);
   const [tts, setTts] = useState(true);
+  const [postToChat, setPostToChat] = useState(false); // sesli cevabı public chat'e de yaz (varsayılan: hayır)
+  const postToChatRef = useRef(false);
   const [active, setActive] = useState(false); // konuşma açık mı
   const [status, setStatus] = useState("Hazır");
   const [log, setLog] = useState<LogItem[]>([]);
@@ -51,8 +53,8 @@ export default function Ear() {
   const [saved, setSaved] = useState(false);
   const [neural, setNeural] = useState(true); // StreamElements TTS (Filiz), her tarayıcıda
   const neuralRef = useRef(true);
-  const [neuralVoice, setNeuralVoice] = useState("google");
-  const neuralVoiceRef = useRef("google");
+  const [neuralVoice, setNeuralVoice] = useState("edge"); // varsayılan: Edge nöral Emel (bedava, key'siz)
+  const neuralVoiceRef = useRef("edge");
   const hydratedRef = useRef(false); // localStorage yüklenene kadar yazma (varsayılan ezmesin)
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const genRef = useRef(0); // konuşma nesli — durdurunca artırılır, uçuşan istekleri iptal eder
@@ -69,6 +71,7 @@ export default function Ear() {
 
   useEffect(() => { ttsRef.current = tts; }, [tts]);
   const save = (k: string, v: string) => { if (hydratedRef.current) { try { localStorage.setItem(k, v); } catch { /* noop */ } } };
+  useEffect(() => { postToChatRef.current = postToChat; save("ear_postchat", postToChat ? "1" : "0"); }, [postToChat]);
   useEffect(() => {
     triggersRef.current = triggers.split(",").map((s) => s.trim()).filter(Boolean);
     save("ear_triggers", triggers);
@@ -191,7 +194,7 @@ export default function Ear() {
       const res = await fetch("/api/ear/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: query || "sana seslendim, kısaca bir şey söyle", history: historyRef.current }),
+        body: JSON.stringify({ text: query || "sana seslendim, kısaca bir şey söyle", history: historyRef.current, postToChat: postToChatRef.current }),
       });
       const j = await res.json();
       if (j.ok && j.reply) {
@@ -285,14 +288,17 @@ export default function Ear() {
       const st = localStorage.getItem("ear_stop");
       const nv = localStorage.getItem("ear_nvoice");
       const nn = localStorage.getItem("ear_neural");
+      const pc = localStorage.getItem("ear_postchat");
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (s) setTriggers(s);
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (st) setStopWords(st);
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (nv && ["google", "Emel", "Ahmet"].includes(nv)) setNeuralVoice(nv); // eski değerleri yok say
+      if (nv && ["edge", "edge-ahmet", "gemini", "google", "Emel", "Ahmet"].includes(nv)) setNeuralVoice(nv); // eski değerleri yok say
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (nn) setNeural(nn === "1");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (pc) setPostToChat(pc === "1");
     } catch { /* noop */ }
     hydratedRef.current = true; // artık değişiklikler kaydedilebilir
     return () => { listeningRef.current = false; try { recRef.current?.stop(); } catch { /* noop */ } };
@@ -316,6 +322,9 @@ export default function Ear() {
           )}
           <label className="flex items-center gap-2 text-sm text-neutral-300">
             <input type="checkbox" checked={tts} onChange={(e) => setTts(e.target.checked)} /> Sesli cevap (TTS)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-neutral-300" title="Kapalıyken botun cevabı sadece sana sesli okunur; açıkken izleyicilerin gördüğü public chat'e de yazılır.">
+            <input type="checkbox" checked={postToChat} onChange={(e) => setPostToChat(e.target.checked)} /> Cevabı chat&apos;e de yaz
           </label>
           <span className={`text-sm px-3 py-1 rounded-full ${active ? "bg-emerald-900 text-emerald-300" : "bg-neutral-800 text-neutral-400"}`}>
             {active ? "🟢 Konuşma açık" : "⚪ Bekliyor"}
@@ -348,7 +357,7 @@ export default function Ear() {
         <div>
           <label className="flex items-center gap-2 text-sm text-neutral-300">
             <input type="checkbox" checked={neural} onChange={(e) => setNeural(e.target.checked)} />
-            Bulut ses (Google Türkçe) — <b>Chrome dahil her tarayıcıda</b> çalışır, ücretsiz (önerilir)
+            Bulut ses — <b>Chrome dahil her tarayıcıda</b> çalışır, ücretsiz (önerilir)
           </label>
           {neural ? (
             <select
@@ -356,9 +365,12 @@ export default function Ear() {
               onChange={(e) => setNeuralVoice(e.target.value)}
               className="w-full mt-2 rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-sm outline-none focus:border-emerald-500"
             >
-              <option value="google">Google Türkçe (bedava, key yok)</option>
+              <option value="edge">⭐ Edge · Emel (nöral, bedava, key yok)</option>
+              <option value="edge-ahmet">Edge · Ahmet (nöral erkek, bedava, key yok)</option>
+              <option value="gemini">Gemini TTS (GEMINI_API_KEY gerekli)</option>
               <option value="Emel">Emel (Azure nöral — AZURE_SPEECH_KEY gerekli)</option>
               <option value="Ahmet">Ahmet (Azure nöral — AZURE_SPEECH_KEY gerekli)</option>
+              <option value="google">Google Türkçe (bedava ama robotik)</option>
             </select>
           ) : (
             <select
@@ -373,7 +385,7 @@ export default function Ear() {
             </select>
           )}
           <p className="text-xs text-neutral-500 mt-1">
-            <b>Google Türkçe</b> bedava ve key gerektirmez (biraz robotik). <b>Emel/Ahmet</b> gerçek nöral seslerdir ama Vercel'de <code>AZURE_SPEECH_KEY</code> + <code>AZURE_SPEECH_REGION</code> env&apos;i gerektirir (Azure ücretsiz kademe ~500k karakter/ay). Key yoksa Emel seçilse bile otomatik Google&apos;a düşer.
+            <b>Edge · Emel/Ahmet</b> gerçek nöral ses, <b>bedava ve key gerektirmez</b> (önerilir). <b>Gemini TTS</b> için <code>GEMINI_API_KEY</code>, <b>Azure Emel/Ahmet</b> için <code>AZURE_SPEECH_KEY</code> + <code>AZURE_SPEECH_REGION</code> gerekir. <b>Google Türkçe</b> bedava ama robotik. Hangisi seçilirse seçilsin, o motor patlarsa ses otomatik Google&apos;a düşer.
           </p>
         </div>
 
@@ -386,6 +398,7 @@ export default function Ear() {
                 if (voiceName) localStorage.setItem("ear_voice", voiceName);
                 localStorage.setItem("ear_neural", neural ? "1" : "0");
                 localStorage.setItem("ear_nvoice", neuralVoice);
+                localStorage.setItem("ear_postchat", postToChat ? "1" : "0");
               } catch { /* noop */ }
               setSaved(true);
               setTimeout(() => setSaved(false), 2500);

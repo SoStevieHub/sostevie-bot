@@ -122,12 +122,14 @@ export async function handleIncomingMessage(msg: IncomingMessage): Promise<void>
   }
 }
 
-// Yayıncının SESLİ komutunu işler: chat'e cevap yazar, metni döner (TTS için).
-// history: son konuşma turları (bağlam için).
+// Yayıncının SESLİ komutunu işler: metni döner (TTS için) ve İSTENİRSE chat'e de yazar.
+// history: son konuşma turları (bağlam için). opts.postToChat: cevabı public chat'e de bas (varsayılan: hayır).
 export async function answerOwnerVoice(
   text: string,
   history: { who: string; text: string }[] = [],
+  opts: { postToChat?: boolean } = {},
 ): Promise<{ ok: boolean; reply?: string; reason?: string }> {
+  const { postToChat = false } = opts;
   const clean = text.trim();
   if (!clean) return { ok: false, reason: "boş" };
 
@@ -166,6 +168,8 @@ export async function answerOwnerVoice(
     });
     if (!raw) return { ok: false, reason: "cevap üretilemedi" };
     const finalText = finalizeMessage(raw, { isInsult: false });
+    // Chat'e yazma kapalıysa: cevabı sadece sesli okumak için döndür (chat'e basma, cooldown'u/logu kirletme).
+    if (!postToChat) return { ok: true, reply: finalText };
     const sent = await sendChatMessage(broadcasterId, finalText);
     if (sent.ok) {
       await setLastReply(Date.now());
