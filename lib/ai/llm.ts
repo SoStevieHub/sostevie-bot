@@ -47,14 +47,16 @@ async function callOne(
   p: Provider,
   system: string,
   user: string,
-  opts: { temperature?: number; maxTokens?: number },
+  opts: { temperature?: number; maxTokens?: number; fast?: boolean },
 ): Promise<string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (p.key) headers.Authorization = `Bearer ${p.key}`;
 
   // gpt-oss reasoning modelleri: düşünme token'ları content'i yiyip boş bırakabiliyor.
   // reasoning_effort=low + bol token ile son cevabı garanti et.
+  // fast (sesli sohbet): reasoning tavanını düşür — daha az düşünme token'ı, daha hızlı cevap.
   const isReasoning = /gpt-oss|qwen3|deepseek-r1|:thinking/i.test(p.model);
+  const reasoningFloor = opts.fast ? 500 : 900;
   const body: Record<string, unknown> = {
     model: p.model,
     messages: [
@@ -62,7 +64,7 @@ async function callOne(
       { role: "user", content: user },
     ],
     temperature: opts.temperature ?? 0.9,
-    max_tokens: isReasoning ? Math.max(opts.maxTokens ?? 300, 900) : opts.maxTokens ?? 300,
+    max_tokens: isReasoning ? Math.max(opts.maxTokens ?? 300, reasoningFloor) : opts.maxTokens ?? 300,
   };
   if (isReasoning) body.reasoning_effort = "low";
 
@@ -93,7 +95,7 @@ async function callOne(
 export async function chat(
   system: string,
   user: string,
-  opts: { temperature?: number; maxTokens?: number } = {},
+  opts: { temperature?: number; maxTokens?: number; fast?: boolean } = {},
 ): Promise<string> {
   const list = providers();
   if (list.length === 0) {

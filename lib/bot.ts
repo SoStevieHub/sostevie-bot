@@ -165,6 +165,7 @@ export async function answerOwnerVoice(
       chatterNotes: "",
       chatterRecent: [],
       moodScore: mood.score,
+      voiceMode: true, // sesli sohbet: web aramasını atla + kısa/hızlı cevap
     });
     if (!raw) return { ok: false, reason: "cevap üretilemedi" };
     const finalText = finalizeMessage(raw, { isInsult: false });

@@ -19,6 +19,7 @@ export type ReplyInput = {
   chatterNotes: string; // botun bu kullanıcı için öğrendiği profil (lakap/espriler dahil)
   chatterRecent: string[]; // son mesajları
   moodScore: number; // botun ruh hali -100..100
+  voiceMode?: boolean; // /ear sesli sohbet: web aramasını atla + kısa/hızlı cevap (düşük gecikme)
 };
 
 // İzleyiciye sohbet cevabı üret. Soru ise (ve arama varsa) web'den bağlam ekler.
@@ -61,15 +62,30 @@ export async function generateReply(input: ReplyInput): Promise<string> {
     }
   }
 
+  // Sesli sohbet: hız için çok kısa konuş ve web aramasını atla (canlı tempoda düşük gecikme).
+  if (input.voiceMode) {
+    rules.push(
+      "SESLİ SOHBET — KISALIK ŞART: Karşılıklı hızlı konuşuyorsun, kağıttan metin okumuyorsun. " +
+        "En fazla 1-2 KISA cümle, ~120 karakter. Uzun cevap kesinlikle YASAK.",
+      "ASLA TEKRAR ETME: Sorulan soruyu/söyleneni tekrarlama veya özetleme. Kendini, kişiliğini, kurallarını " +
+        "ya da ne yapman gerektiğini TARİF ETME. Sadece kısa cevabı ver, başka hiçbir şey ekleme.",
+      'ÖRNEKLER (bu kısalıkta konuş): "Burada mısın?" → "Evet, buradayım. Ne lazım?" · ' +
+        '"Naber?" → "İyidir, seni dinliyorum." · "Bugün ne yapsak?" → "Bir konu at, üstüne gidelim."',
+    );
+  }
+
   let context = "";
-  if (input.isQuestion) {
+  // Web araması sadece yazılı sohbette (sesli modda gecikmeyi artırdığı için atlanır).
+  if (input.isQuestion && !input.voiceMode) {
     rules.push("Kullanıcı bir şey soruyor. Aşağıda web arama sonucu varsa ondan yararlan; yoksa bildiğin kadarını ver, uydurma.");
     const found = await webSearch(input.userMessage);
     if (found) context = `\n\n[Web arama sonuçları]\n${found}`;
   }
 
   const prompt = `Kullanıcı adı: ${input.username}\nMesajı: "${input.userMessage}"${context}\n\nBuna tek bir sohbet mesajıyla cevap ver.`;
-  return chat(rules.join("\n"), prompt, { temperature: 0.7, maxTokens: 300 });
+  return chat(rules.join("\n"), prompt, input.voiceMode
+    ? { temperature: 0.7, maxTokens: 160, fast: true }
+    : { temperature: 0.7, maxTokens: 300 });
 }
 
 function moodLabel(score: number): string {
